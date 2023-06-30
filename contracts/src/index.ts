@@ -1,3 +1,3 @@
-import { Add } from './Add.js';
+import { zkAuthentification } from './Authentification';
 
-export { Add };
+export { zkAuthentification };
