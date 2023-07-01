@@ -25,13 +25,14 @@ export class zkAuthentification extends SmartContract {
     valueBefore: Field,
     increment: Field
   ) {
-    this.mapRoot.getAndAssertEquals();
+    const initialRoot = this.mapRoot.get();
+    this.mapRoot.assertEquals(initialRoot);
 
     increment.assertLessThan(Field(1000));
 
     // Check the initial state
     const [rootBefore, keyBefore] = keyWitness.computeRootAndKey(valueBefore);
-    rootBefore.assertEquals(this.mapRoot.get());
+    rootBefore.assertEquals(initialRoot);
 
     keyBefore.assertEquals(keyToChange);
 

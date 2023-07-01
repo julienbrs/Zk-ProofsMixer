@@ -1,41 +1,18 @@
-import {
-  Mina,
-  isReady,
-  shutdown,
-  UInt32,
-  UInt64,
-  Int64,
-  Character,
-  CircuitString,
-  PrivateKey,
-  Signature,
-  Poseidon,
-  Field,
-  Circuit,
-  MerkleWitness,
-  MerkleTree,
-  AccountUpdate,
-  Struct,
-  MerkleMap,
-  Bool,
-} from 'snarkyjs';
+import { Mina, PrivateKey, Field, AccountUpdate, MerkleMap } from 'snarkyjs';
 
 import { zkAuthentification } from './Authentification.js';
 
-await isReady;
-
 // --------------------------------------
-console.log('--------------------------------------');
+console.log('SnarkyJS loaded');
 
-const Local = Mina.LocalBlockchain();
+const useProof = true;
+
+const Local = Mina.LocalBlockchain({ proofsEnabled: useProof });
 Mina.setActiveInstance(Local);
 const { privateKey: deployerKey, publicKey: deployerAccount } =
   Local.testAccounts[0];
-const { privateKey: senderPrivateKey, publicKey: senderPublicKey } =
-  Local.testAccounts[1];
 
 // --------------------------------------
-// create a new merkle tree and BasicMerkleTreeContract zkapp account
 
 {
   const zkAuthentificationPrivateKey = PrivateKey.random();
@@ -45,29 +22,30 @@ const { privateKey: senderPrivateKey, publicKey: senderPublicKey } =
   const zkApp = new zkAuthentification(zkAuthentificationAddress);
   await zkAuthentification.compile();
 
-  // create a new tree
+  // create a new map
   const map = new MerkleMap();
   const rootBefore = map.getRoot();
-  const key = Field(0);
+  const key = Field(100);
   const witness = map.getWitness(key);
 
   // deploy the smart contract
   const deployTxn = await Mina.transaction(deployerAccount, () => {
     AccountUpdate.fundNewAccount(deployerAccount);
+
+    console.log('Deploying zkAuthentification');
     zkApp.deploy();
     // get the root of the new tree to use as the initial tree root
     zkApp.initAccount(rootBefore);
   });
   await deployTxn.prove();
-  deployTxn.sign([deployerKey, zkAuthentificationPrivateKey]);
+  await deployTxn.sign([deployerKey, zkAuthentificationPrivateKey]).send();
+  console.log('zkAuthentification deployed');
 
-  const pendingDeployTx = await deployTxn.send();
   /**
    * `txn.send()` returns a pending transaction with two methods - `.wait()` and `.hash()`
    * `.hash()` returns the transaction hash
    * `.wait()` automatically resolves once the transaction has been included in a block. this is redundant for the LocalBlockchain, but very helpful for live testnets
    */
-  await pendingDeployTx.wait();
 
   // get the value of the key
   const valueBefore = map.get(key);
@@ -76,16 +54,12 @@ const { privateKey: senderPrivateKey, publicKey: senderPublicKey } =
 
   // update the smart contract
   const updateTxn = await Mina.transaction(deployerAccount, () => {
-    zkApp.updateAccount(witness, key, valueBefore, Field(1));
+    zkApp.updateAccount(witness, key, Field(50), Field(1));
   });
 
   await updateTxn.prove();
 
-  updateTxn.sign([deployerKey, zkAuthentificationPrivateKey]);
-
-  const pendingUpdateTx = await updateTxn.send();
-
-  await pendingUpdateTx.wait();
+  await updateTxn.sign([deployerKey, zkAuthentificationPrivateKey]).send();
 
   // get the new value of the key
   const valueAfter = map.get(key);
