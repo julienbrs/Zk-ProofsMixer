@@ -24,7 +24,7 @@ const { privateKey: deployerKey, publicKey: deployerAccount } =
 
   // create a new map
   const map = new MerkleMap();
-  const rootBefore = map.getRoot();
+  const rootBefore = Field(50);
   const key = Field(100);
   const witness = map.getWitness(key);
 
@@ -38,7 +38,11 @@ const { privateKey: deployerKey, publicKey: deployerAccount } =
     zkApp.initAccount(rootBefore);
   });
   await deployTxn.prove();
-  await deployTxn.sign([deployerKey, zkAuthentificationPrivateKey]).send();
+  const pendingDeployTxn = deployTxn.sign([
+    deployerKey,
+    zkAuthentificationPrivateKey,
+  ]);
+  await pendingDeployTxn.send();
   console.log('zkAuthentification deployed');
 
   /**
@@ -59,7 +63,12 @@ const { privateKey: deployerKey, publicKey: deployerAccount } =
 
   await updateTxn.prove();
 
-  await updateTxn.sign([deployerKey, zkAuthentificationPrivateKey]).send();
+  const pendingUpdateTxn = await updateTxn.sign([
+    deployerKey,
+    zkAuthentificationPrivateKey,
+  ]);
+
+  await pendingUpdateTxn.send();
 
   // get the new value of the key
   const valueAfter = map.get(key);
