@@ -11,18 +11,20 @@ import {
 } from 'snarkyjs';
 
 export class zkMixer extends SmartContract {
-  @state(Field) mapRoot = State<Field>();
+  @state(Field) commitmentRoot = State<Field>();
+  @state(Field) nullifierRoot = State<Field>(); // It's not nullifier but hash(nullifier)
 
   @method initState(initialRoot: Field) {
-    this.mapRoot.set(initialRoot);
+    this.commitmentRoot.set(initialRoot);
+    this.nullifierRoot.set(initialRoot);
   }
 
   deposit(amount: Field, commitment: Field, witness: MerkleMapWitness) {
-    this.mapRoot.getAndAssertEquals();
+    this.commitmentRoot.getAndAssertEquals();
 
     const notDeposited = Field(0);
     const [oldRoot, key] = witness.computeRootAndKey(notDeposited);
-    oldRoot.assertEquals(this.mapRoot.get());
+    oldRoot.assertEquals(this.commitmentRoot.get());
 
     key.assertEquals(commitment);
 
@@ -30,7 +32,7 @@ export class zkMixer extends SmartContract {
     const deposited = Field(1); // Find a way to put the amount also here
     const [newRoot, _] = witness.computeRootAndKey(deposited);
 
-    this.mapRoot.set(newRoot);
+    this.commitmentRoot.set(newRoot);
 
     const sendingAccount = AccountUpdate.createSigned(this.sender);
     sendingAccount.send({ to: this.address, amount: 10 });
@@ -43,13 +45,14 @@ export class zkMixer extends SmartContract {
     commitmentWitness: MerkleMapWitness
   ) {
     // check onchain state matches
-    this.mapRoot.getAndAssertEquals();
+    this.commitmentRoot.getAndAssertEquals();
+    this.nullifierRoot.getAndAssertEquals();
 
     // check that the nullifier is not already spent
     const notSpent = Field(0);
     const [oldRootNullifier, key] =
       nullifierWitness.computeRootAndKey(notSpent);
-    oldRootNullifier.assertEquals(this.mapRoot.get());
+    oldRootNullifier.assertEquals(this.nullifierRoot.get());
 
     const nullifierHash = Poseidon.hash(nullifier.toFields());
     key.assertEquals(nullifierHash);
@@ -59,13 +62,13 @@ export class zkMixer extends SmartContract {
     const [oldRootCommitment, keyCommitment] =
       commitmentWitness.computeRootAndKey(deposited);
 
-    oldRootCommitment.assertEquals(this.mapRoot.get());
+    oldRootCommitment.assertEquals(this.commitmentRoot.get());
     keyCommitment.assertEquals(nullifierHash);
 
     // Consuming the commitment
     const spent = Field(1);
     const [newNullifierRoot, _] = nullifierWitness.computeRootAndKey(spent);
-    this.mapRoot.set(newNullifierRoot);
+    this.commitmentRoot.set(newNullifierRoot);
 
     this.send({ to: this.sender, amount: 10 });
   }
