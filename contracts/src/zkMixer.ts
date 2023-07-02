@@ -34,4 +34,38 @@ export class zkMixer extends SmartContract {
 
     // How to send the amount to the user?
   }
+
+  withdraw(
+    amount: Field,
+    nullifier: Field,
+    nullifierWitness: MerkleMapWitness,
+    commitmentWitness: MerkleMapWitness
+  ) {
+    // check onchain state matches
+    this.mapRoot.getAndAssertEquals();
+
+    // check that the nullifier is not already spent
+    const notSpent = Field(0);
+    const [oldRootNullifier, key] =
+      nullifierWitness.computeRootAndKey(notSpent);
+    oldRootNullifier.assertEquals(this.mapRoot.get());
+
+    const nullifierHash = Poseidon.hash(nullifier.toFields());
+    key.assertEquals(nullifierHash);
+
+    // check that the commitment is in the tree
+    const deposited = Field(1);
+    const [oldRootCommitment, keyCommitment] =
+      commitmentWitness.computeRootAndKey(deposited);
+
+    oldRootCommitment.assertEquals(this.mapRoot.get());
+    keyCommitment.assertEquals(nullifierHash);
+
+    // Consuming the commitment
+    const spent = Field(1);
+    const [newNullifierRoot, _] = nullifierWitness.computeRootAndKey(spent);
+    this.mapRoot.set(newNullifierRoot);
+
+    // How to send the amount to the user? using account updates?
+  }
 }
