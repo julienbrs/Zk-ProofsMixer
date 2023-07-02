@@ -42,7 +42,8 @@ export class zkMixer extends SmartContract {
     amount: Field,
     nullifier: Field,
     nullifierWitness: MerkleMapWitness,
-    commitmentWitness: MerkleMapWitness
+    commitmentWitness: MerkleMapWitness,
+    nonce: Field
   ) {
     // check onchain state matches
     this.commitmentRoot.getAndAssertEquals();
@@ -54,8 +55,8 @@ export class zkMixer extends SmartContract {
       nullifierWitness.computeRootAndKey(notSpent);
     oldRootNullifier.assertEquals(this.nullifierRoot.get());
 
-    const nullifierHash = Poseidon.hash(nullifier.toFields());
-    key.assertEquals(nullifierHash);
+    const commitmentCalculated = Poseidon.hash([nonce, nullifier]);
+    key.assertEquals(commitmentCalculated);
 
     // check that the commitment is in the tree
     const deposited = Field(1);
@@ -63,7 +64,7 @@ export class zkMixer extends SmartContract {
       commitmentWitness.computeRootAndKey(deposited);
 
     oldRootCommitment.assertEquals(this.commitmentRoot.get());
-    keyCommitment.assertEquals(nullifierHash);
+    keyCommitment.assertEquals(commitmentCalculated);
 
     // Consuming the commitment
     const spent = Field(1);
