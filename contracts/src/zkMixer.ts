@@ -32,7 +32,8 @@ export class zkMixer extends SmartContract {
 
     this.mapRoot.set(newRoot);
 
-    // How to send the amount to the user?
+    const sendingAccount = AccountUpdate.createSigned(this.sender);
+    sendingAccount.send({ to: this.address, amount: 10 });
   }
 
   withdraw(
@@ -66,6 +67,6 @@ export class zkMixer extends SmartContract {
     const [newNullifierRoot, _] = nullifierWitness.computeRootAndKey(spent);
     this.mapRoot.set(newNullifierRoot);
 
-    // How to send the amount to the user? using account updates?
+    this.send({ to: this.sender, amount: 10 });
   }
 }
