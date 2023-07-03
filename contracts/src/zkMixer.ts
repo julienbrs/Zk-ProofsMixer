@@ -10,14 +10,20 @@ import {
   Provable,
   UInt32,
   UInt64,
-  Int64,
   Bool,
-  Circuit,
+  Permissions
 } from 'snarkyjs';
 
 export class ZkMixer extends SmartContract {
   @state(Field) commitmentsRoot = State<Field>();
   @state(Field) nullifierHashesRoot = State<Field>(); // It's not nullifier but hash(nullifier)
+
+  init() {
+    super.init();
+    this.account.permissions.set({
+      ...Permissions.default(),
+    });
+  }
 
   @method initState(initialCommitmentRoot: Field, initialNullifierRoot: Field) {
     this.commitmentsRoot.set(initialCommitmentRoot);
