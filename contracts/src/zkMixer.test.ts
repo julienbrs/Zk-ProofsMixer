@@ -7,6 +7,7 @@ import {
   Poseidon,
   PrivateKey,
   PublicKey,
+  UInt32,
   UInt64,
 } from 'snarkyjs';
 
@@ -90,6 +91,37 @@ describe('ZkMixer', () => {
     return { userNonce, nullifier };
   }
 
+  async function withdraw(
+    userNonce: UInt32,
+    nullifier: Field,
+    user: PublicKey,
+    depositType: Field
+  ) {
+    const commitment = Poseidon.hash(
+      [userNonce.toFields(), nullifier, Field(1)].flat()
+    );
+
+    // get the witness for the current tree
+    const commitmentWitness = userCommitments.getWitness(commitment);
+    const nullifierWitness = userNullifierHashes.getWitness(nullifier);
+    // update the leaf locally
+    userCommitments.set(commitment, Field(1));
+
+    const withdrawTx = await Mina.transaction(user, () => {
+      zkMixer.withdraw(
+        nullifier,
+        nullifierWitness,
+        commitmentWitness,
+        userNonce,
+        depositType
+      );
+    });
+    await withdrawTx.prove();
+    await withdrawTx.sign([userKey]).send();
+
+    userNullifierHashes.set(nullifier, Field(1));
+  }
+
   it('should deploy', () => {
     expect(zkMixer).toBeDefined();
   });
@@ -130,55 +162,26 @@ describe('ZkMixer', () => {
 
   describe.only('withdraw', () => {
     it('should withdraw type 1', async () => {
-      const depositType = Field(1);
       // deposit type 1
-      const { userNonce, nullifier } = await deposit(Field(1), user);
+      const depositType = Field(1);
+      const { userNonce, nullifier } = await deposit(depositType, user);
 
-      // get balances
-
+      // get initial balances
       const initialUserBalance = Mina.getBalance(user).toBigInt();
       const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
 
-      const commitment = Poseidon.hash(
-        [userNonce.toFields(), nullifier, Field(1)].flat()
-      );
-
-      // get the witness for the current tree
-      const commitmentWitness = userCommitments.getWitness(commitment);
-      const nullifierWitness = userNullifierHashes.getWitness(nullifier);
-      // update the leaf locally
-      userCommitments.set(commitment, Field(1));
-
-      const withdrawTx = await Mina.transaction(user, () => {
-        zkMixer.withdraw(
-          nullifier,
-          nullifierWitness,
-          commitmentWitness,
-          userNonce,
-          Field(1)
-        );
-      });
-      await withdrawTx.prove();
-      await withdrawTx.sign([userKey]).send();
+      // withdraw type 1
+      await withdraw(userNonce, nullifier, user, depositType);
 
       // get final balances
       const finalUserBalance = Mina.getBalance(user).toBigInt();
       const finalSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
 
-      userNullifierHashes.set(nullifier, Field(1));
-
       // compare the nullifier tree to our local tree
-      console.log(
-        'userNullifierHashes offchain',
-        userNullifierHashes.getRoot()
-      );
-      console.log(
-        'zkMixer.nullifierHashesRoot onchain',
-        zkMixer.nullifierHashesRoot.get()
-      );
       expect(userNullifierHashes.getRoot()).toStrictEqual(
         zkMixer.nullifierHashesRoot.get()
       );
+      // check balances
       expect(finalUserBalance).toEqual(
         initialUserBalance + depositType.toBigInt()
       );
