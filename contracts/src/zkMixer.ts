@@ -83,22 +83,23 @@ export class ZkMixer extends SmartContract {
       nullifierWitness.computeRootAndKey(notSpent);
     oldRootNullifier.assertEquals(this.nullifierHashesRoot.get());
 
+    key.assertEquals(nullifier);
+
     const commitmentCalculated = Poseidon.hash(
       [nonce.toFields(), nullifier, depositType].flat()
     );
-    key.assertEquals(commitmentCalculated);
-
     // check that the commitment is in the tree
     const [expectedRootCommitment, keyCommitment] =
       commitmentWitness.computeRootAndKey(depositType);
 
     expectedRootCommitment.assertEquals(this.commitmentsRoot.get());
+
     keyCommitment.assertEquals(commitmentCalculated);
 
     // Consuming the commitment
     const spent = Field(1);
     const [newNullifierRoot, _] = nullifierWitness.computeRootAndKey(spent);
-    this.commitmentsRoot.set(newNullifierRoot);
+    this.nullifierHashesRoot.set(newNullifierRoot);
 
     // Calculate the amount to withdraw
     const whatTypeBool: Bool[] = [1, 2, 3].map((i) => depositType.equals(i));
