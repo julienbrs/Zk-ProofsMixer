@@ -19,13 +19,13 @@ import { ZkMixer } from './zkMixer.js';
 let zkMixer: ZkMixer,
   zkMixerPrivateKey: PrivateKey,
   zkMixerPublicKey: PublicKey,
+  userCommitments: MerkleMap,
+  userHashedNullifiers: MerkleMap,
   sender: PublicKey,
-  senderKey: PrivateKey,
-  userCommitment: MerkleMap,
-  userNullifier: MerkleMap;
+  senderKey: PrivateKey;
 
-userCommitment = new MerkleMap();
-userNullifier = new MerkleMap();
+userCommitments = new MerkleMap();
+userHashedNullifiers = new MerkleMap();
 
 interface DepositNote {
   nonce: UInt32;
@@ -69,7 +69,7 @@ await deployTxn.prove();
 await deployTxn.sign([senderKey, zkMixerPrivateKey]).send();
 
 const initTxn = await Mina.transaction(sender, () => {
-  zkMixer.initState(userCommitment.getRoot(), userNullifier.getRoot());
+  zkMixer.initState(userCommitments.getRoot(), userHashedNullifiers.getRoot());
 });
 await initTxn.prove();
 await initTxn.sign([senderKey]).send();
@@ -84,21 +84,26 @@ async function deposit(user: User, depositType: Field): Promise<DepositNote> {
   depositType.assertGreaterThanOrEqual(Field(1));
   depositType.assertLessThanOrEqual(Field(3));
 
+  // 1) Generate random nullifier
+  const nullifier = Field.random();
+
+  // 2) Generate commitment from nullifier, account nonce and deposit type
   const userAccount = Mina.getAccount(user.publicKey);
   const nonce = userAccount.nonce;
-  const nullifier = Field.random();
   const commitment = Poseidon.hash(
     [nonce.toFields(), nullifier, depositType].flat()
   );
-  const witness = userCommitment.getWitness(commitment);
+  const witness = userCommitments.getWitness(commitment);
 
+  // 3) Generate proof and send transaction to Mina
   const depositTx = await Mina.transaction(user.publicKey, () => {
     zkMixer.deposit(commitment, witness, depositType);
   });
   await depositTx.prove();
   await depositTx.sign([user.privateKey]).send();
 
-  userCommitment.set(commitment, Field(1));
+  // 4) Set commitment and return deposit note
+  userCommitments.set(commitment, Field(1));
   return { nonce, commitment, nullifier, depositType } as DepositNote;
 }
 
@@ -109,23 +114,23 @@ async function withdraw(
   depositType.assertGreaterThanOrEqual(Field(1));
   depositType.assertLessThanOrEqual(Field(3));
 
-  const commitmentWitness = userCommitment.getWitness(commitment);
+  const commitmentWitness = userCommitments.getWitness(commitment);
   const nullifierHash = Poseidon.hash([nullifier]);
-  const nullifierHashWitness = userNullifier.getWitness(nullifierHash);
+  const nullifierHashWitness = userHashedNullifiers.getWitness(nullifierHash);
 
   const withdrawTx = await Mina.transaction(user.publicKey, () => {
     zkMixer.withdraw(
       nullifier,
       nullifierHashWitness,
       commitmentWitness,
-      nonce.toFields(),
+      nonce,
       depositType
     );
   });
   await withdrawTx.prove();
   await withdrawTx.sign([user.privateKey]).send();
 
-  userNullifier.set(nullifierHash, Field(1));
+  userHashedNullifiers.set(nullifierHash, Field(1));
 }
 
 // --------------------------------------
