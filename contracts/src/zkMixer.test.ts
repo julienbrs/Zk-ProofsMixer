@@ -90,7 +90,10 @@ describe('ZkMixer', () => {
       [userNonce.toFields(), nullifier, depositType].flat()
     );
 
-    console.log('balance before deposit', userAccount.balance);
+    // get initial balances
+    const initialUserBalance = Mina.getBalance(user).toBigInt();
+    const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+
     // get the witness for the current tree
     const witness = userCommitments.getWitness(commitment);
     // update the leaf locally
@@ -102,12 +105,17 @@ describe('ZkMixer', () => {
     await depositTx.prove();
     await depositTx.sign([userKey]).send();
 
-    console.log('balance after deposit', userAccount.balance);
+    // get final balances
+    const finalUserBalance = Mina.getBalance(user).toBigInt();
+    const finalSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
 
     // compare the root of the smart contract tree to our local tree
     expect(userCommitments.getRoot()).toStrictEqual(
       zkMixer.commitmentsRoot.get()
     );
-    expect(Number(userAccount.balance)).toEqual(DEPOSIT_AMOUNT[1]);
+    expect(finalUserBalance).toEqual(
+      initialUserBalance - depositType.toBigInt()
+    );
+    expect(finalSCBalance).toEqual(initialSCBalance + depositType.toBigInt());
   });
 });
