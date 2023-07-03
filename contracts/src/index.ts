@@ -1,3 +1,3 @@
-import { zkAuthentification } from './zkMixer';
+import { ZkMixer } from './zkMixer';
 
-export { zkAuthentification };
+export { ZkMixer };

@@ -6,23 +6,22 @@ import {
   state,
   MerkleMapWitness,
   AccountUpdate,
-  UInt64,
   Poseidon,
-  Circuit,
-  Int64,
-  Bool,
+  Provable,
 } from 'snarkyjs';
 
-export class zkMixer extends SmartContract {
+export class ZkMixer extends SmartContract {
   @state(Field) commitmentRoot = State<Field>();
   @state(Field) nullifierRoot = State<Field>(); // It's not nullifier but hash(nullifier)
 
-  @method initState(initialRoot: Field) {
-    this.commitmentRoot.set(initialRoot);
-    this.nullifierRoot.set(initialRoot);
+  @method initState(initialCommitmentRoot: Field, initialNullifierRoot: Field) {
+    this.commitmentRoot.set(initialCommitmentRoot);
+    this.nullifierRoot.set(initialNullifierRoot);
   }
 
-  deposit(amountToSend: bigint, commitment: Field, witness: MerkleMapWitness) {
+  deposit(commitment: Field, witness: MerkleMapWitness, depositType: Field) {
+    depositType.assertGreaterThanOrEqual(Field(1));
+    depositType.assertLessThanOrEqual(Field(3));
     this.commitmentRoot.getAndAssertEquals();
 
     const notDeposited = Field(0);
@@ -32,34 +31,34 @@ export class zkMixer extends SmartContract {
     key.assertEquals(commitment);
 
     // compute the root after incrementing
-    const deposited = Field(amountToSend); //  1 2 or 3
-    const [newRoot, _] = witness.computeRootAndKey(deposited);
+    const [newRoot, _] = witness.computeRootAndKey(depositType);
 
     this.commitmentRoot.set(newRoot);
 
     const sendingAccount = AccountUpdate.createSigned(this.sender);
-    sendingAccount.send({ to: this.address, amount: amountToSend }); // TODO: update to amount
+
+    const amountToSend = Provable.switch(
+      [1, 2, 3].map((i) => depositType.equals(i)),
+      Field,
+      [Field(1), Field(5), Field(10)]
+    );
+
+    sendingAccount.send({ to: this.address, amount: amountToSend.toBigInt() });
   }
 
   withdraw(
-    amountToWithdraw: bigint,
     nullifier: Field,
     nullifierWitness: MerkleMapWitness,
     commitmentWitness: MerkleMapWitness,
-    nonce: Field
+    nonce: Field[],
+    depositType: Field
   ) {
+    depositType.assertGreaterThanOrEqual(Field(1));
+    depositType.assertLessThanOrEqual(Field(3));
+
     // check onchain state matches
     this.commitmentRoot.getAndAssertEquals();
     this.nullifierRoot.getAndAssertEquals();
-
-    /* Can we do that or we need to use a circuit? */
-    // const amountField = Field(amountToWithdraw);
-    // const isOne = amountField.equals(Field(1));
-    // const isTwo = amountField.equals(Field(2));
-    // const isThree = amountField.equals(Field(3));
-
-    // const isValidAmount = isOne.or(isTwo).or(isThree);
-    // isValidAmount.assertTrue();
 
     // check that the nullifier is not already spent
     const notSpent = Field(0);
@@ -67,13 +66,14 @@ export class zkMixer extends SmartContract {
       nullifierWitness.computeRootAndKey(notSpent);
     oldRootNullifier.assertEquals(this.nullifierRoot.get());
 
-    const commitmentCalculated = Poseidon.hash([nonce, nullifier]);
+    const commitmentCalculated = Poseidon.hash(
+      [nonce, nullifier, depositType].flat()
+    );
     key.assertEquals(commitmentCalculated);
 
     // check that the commitment is in the tree
-    const deposited = Field(amountToWithdraw);
     const [expectedRootCommitment, keyCommitment] =
-      commitmentWitness.computeRootAndKey(deposited);
+      commitmentWitness.computeRootAndKey(depositType);
 
     expectedRootCommitment.assertEquals(this.commitmentRoot.get());
     keyCommitment.assertEquals(commitmentCalculated);
@@ -83,6 +83,13 @@ export class zkMixer extends SmartContract {
     const [newNullifierRoot, _] = nullifierWitness.computeRootAndKey(spent);
     this.commitmentRoot.set(newNullifierRoot);
 
-    this.send({ to: this.sender, amount: amountToWithdraw });
+    // Withdraw funds
+    const amountToWithdraw = Provable.switch(
+      [1, 2, 3].map((i) => depositType.equals(i)),
+      Field,
+      [Field(1), Field(5), Field(10)]
+    );
+
+    this.send({ to: this.sender, amount: amountToWithdraw.toBigInt() });
   }
 }
