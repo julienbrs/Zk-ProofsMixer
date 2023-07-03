@@ -24,9 +24,11 @@ describe('ZkMixer', () => {
     zkMixerPublicKey: PublicKey,
     userCommitments: MerkleMap,
     userNullifierHashes: MerkleMap,
+    Local: any,
     sender: PublicKey,
     senderKey: PrivateKey,
-    Local: any;
+    user: PublicKey,
+    userKey: PrivateKey;
 
   beforeAll(() => {
     if (proofsEnabled) {
@@ -39,6 +41,8 @@ describe('ZkMixer', () => {
     Mina.setActiveInstance(Local);
     sender = Local.testAccounts[0].publicKey;
     senderKey = Local.testAccounts[0].privateKey;
+    user = Local.testAccounts[1].publicKey;
+    userKey = Local.testAccounts[1].privateKey;
 
     zkMixerPrivateKey = PrivateKey.random();
     zkMixerPublicKey = zkMixerPrivateKey.toPublicKey();
@@ -64,35 +68,13 @@ describe('ZkMixer', () => {
     await initTxn.sign([senderKey]).send();
   });
 
-  it('should deploy', () => {
-    expect(zkMixer).toBeDefined();
-  });
-
-  it('should initialize', () => {
-    const initialCommitmentsRoot = zkMixer.commitmentsRoot.get();
-    const initialNullifierHashesRoot = zkMixer.nullifierHashesRoot.get();
-
-    expect(initialCommitmentsRoot).toStrictEqual(userCommitments.getRoot());
-    expect(initialNullifierHashesRoot).toStrictEqual(
-      userNullifierHashes.getRoot()
-    );
-  });
-
-  it.only('should deposit type 1', async () => {
-    const user = Local.testAccounts[1].publicKey;
-    const userKey = Local.testAccounts[1].privateKey;
-
+  async function deposit(depositType: Field, user: PublicKey) {
     const userAccount = Mina.getAccount(user);
     const userNonce = userAccount.nonce;
-    const depositType = Field(1);
     const nullifier = Field.random();
     const commitment = Poseidon.hash(
       [userNonce.toFields(), nullifier, depositType].flat()
     );
-
-    // get initial balances
-    const initialUserBalance = Mina.getBalance(user).toBigInt();
-    const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
 
     // get the witness for the current tree
     const witness = userCommitments.getWitness(commitment);
@@ -104,18 +86,92 @@ describe('ZkMixer', () => {
     });
     await depositTx.prove();
     await depositTx.sign([userKey]).send();
+  }
 
-    // get final balances
-    const finalUserBalance = Mina.getBalance(user).toBigInt();
-    const finalSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+  describe('deposit', () => {
+    it('should deploy', () => {
+      expect(zkMixer).toBeDefined();
+    });
 
-    // compare the root of the smart contract tree to our local tree
-    expect(userCommitments.getRoot()).toStrictEqual(
-      zkMixer.commitmentsRoot.get()
-    );
-    expect(finalUserBalance).toEqual(
-      initialUserBalance - depositType.toBigInt()
-    );
-    expect(finalSCBalance).toEqual(initialSCBalance + depositType.toBigInt());
+    it('should initialize', () => {
+      const initialCommitmentsRoot = zkMixer.commitmentsRoot.get();
+      const initialNullifierHashesRoot = zkMixer.nullifierHashesRoot.get();
+
+      expect(initialCommitmentsRoot).toStrictEqual(userCommitments.getRoot());
+      expect(initialNullifierHashesRoot).toStrictEqual(
+        userNullifierHashes.getRoot()
+      );
+    });
+
+    it('should deposit type 1', async () => {
+      // get initial balances
+      const initialUserBalance = Mina.getBalance(user).toBigInt();
+      const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+
+      const depositType = Field(1);
+      await deposit(depositType, user);
+
+      // get final balances
+      const finalUserBalance = Mina.getBalance(user).toBigInt();
+      const finalSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+
+      // compare the root of the smart contract tree to our local tree
+      expect(userCommitments.getRoot()).toStrictEqual(
+        zkMixer.commitmentsRoot.get()
+      );
+      expect(finalUserBalance).toEqual(
+        initialUserBalance - depositType.toBigInt()
+      );
+      expect(finalSCBalance).toEqual(initialSCBalance + depositType.toBigInt());
+    });
+  });
+
+  describe.only('withdraw', () => {
+    it('should withdraw type 1', async () => {
+      // deposit type 1
+      await deposit(Field(1), user);
+
+      // get balances before withdraw
+      const initialUserBalance = Mina.getBalance(user).toBigInt();
+      const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+
+      const userAccount = Mina.getAccount(user);
+      const userNonce = userAccount.nonce;
+      const nullifier = Field.random();
+      const commitment = Poseidon.hash(
+        [userNonce.toFields(), nullifier, Field(1)].flat()
+      );
+
+      // get the witness for the current tree
+      const commitmentWitness = userCommitments.getWitness(commitment);
+      const nullifierWitness = userNullifierHashes.getWitness(nullifier);
+      // update the leaf locally
+      userCommitments.set(commitment, Field(1));
+
+      const withdrawTx = await Mina.transaction(user, () => {
+        zkMixer.withdraw(
+          nullifier,
+          nullifierWitness,
+          commitmentWitness,
+          userNonce,
+          Field(1)
+        );
+      });
+      await withdrawTx.prove();
+      await withdrawTx.sign([userKey]).send();
+
+      // get final balances
+      const finalUserBalance = Mina.getBalance(user).toBigInt();
+      const finalSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+
+      // compare the root of the smart contract tree to our local tree
+      expect(userCommitments.getRoot()).toStrictEqual(
+        zkMixer.commitmentsRoot.get()
+      );
+      expect(finalUserBalance).toEqual(
+        initialUserBalance + Field(1).toBigInt()
+      );
+      expect(finalSCBalance).toEqual(initialSCBalance - Field(1).toBigInt());
+    });
   });
 });
