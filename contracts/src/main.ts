@@ -6,6 +6,7 @@ import {
   Poseidon,
   PrivateKey,
   PublicKey,
+  UInt32,
   UInt64,
 } from 'snarkyjs';
 
@@ -25,6 +26,13 @@ let zkMixer: ZkMixer,
 
 userCommitment = new MerkleMap();
 userNullifier = new MerkleMap();
+
+interface DepositNote {
+  nonce: UInt32;
+  commitment: Field;
+  nullifier: Field;
+  depositType: Field;
+}
 
 // --------------------------------------
 // Mina blockchain setup
@@ -72,14 +80,15 @@ console.log('zkMixer deployed and initialized');
 // Helpers for deposit and withdraw
 // --------------------------------------
 
-async function deposit(user: User, depositType: Field) {
+async function deposit(user: User, depositType: Field): Promise<DepositNote> {
   depositType.assertGreaterThanOrEqual(Field(1));
   depositType.assertLessThanOrEqual(Field(3));
 
   const userAccount = Mina.getAccount(user.publicKey);
+  const nonce = userAccount.nonce;
   const nullifier = Field.random();
   const commitment = Poseidon.hash(
-    [userAccount.nonce.toFields(), nullifier, depositType].flat()
+    [nonce.toFields(), nullifier, depositType].flat()
   );
   const witness = userCommitment.getWitness(commitment);
 
@@ -90,19 +99,16 @@ async function deposit(user: User, depositType: Field) {
   await depositTx.sign([user.privateKey]).send();
 
   userCommitment.set(commitment, Field(1));
-  return { commitment, nullifier, depositType };
+  return { nonce, commitment, nullifier, depositType } as DepositNote;
 }
 
 async function withdraw(
   user: User,
-  depositType: Field,
-  commitment: Field,
-  nullifier: Field
+  { nonce, commitment, nullifier, depositType }: DepositNote
 ) {
   depositType.assertGreaterThanOrEqual(Field(1));
   depositType.assertLessThanOrEqual(Field(3));
 
-  const userAccount = Mina.getAccount(user.publicKey);
   const commitmentWitness = userCommitment.getWitness(commitment);
   const nullifierHash = Poseidon.hash([nullifier]);
   const nullifierHashWitness = userNullifier.getWitness(nullifierHash);
@@ -112,7 +118,7 @@ async function withdraw(
       nullifier,
       nullifierHashWitness,
       commitmentWitness,
-      userAccount.nonce.toFields(),
+      nonce.toFields(),
       depositType
     );
   });
@@ -135,15 +141,11 @@ console.log('Bob balance:', bob.balance().toString());
 console.log('');
 
 console.log('Alice deposit (type 1)...');
-let {
-  commitment: aliceCommitment,
-  nullifier: aliceNullifier,
-  depositType: aliceDepositType,
-} = await deposit(alice, Field(1));
+let aliceNote = await deposit(alice, Field(1));
 console.log('Alice balance:', alice.balance().toString());
 console.log('');
 
 console.log('Bob claim Alice deposit...');
-await withdraw(bob, aliceDepositType, aliceCommitment, aliceNullifier);
+await withdraw(bob, aliceNote);
 console.log('Alice balance:', alice.balance().toString());
 console.log('Bob balance:', bob.balance().toString());
