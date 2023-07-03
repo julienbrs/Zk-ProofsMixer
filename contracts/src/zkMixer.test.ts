@@ -86,6 +86,8 @@ describe('ZkMixer', () => {
     });
     await depositTx.prove();
     await depositTx.sign([userKey]).send();
+
+    return { userNonce, nullifier };
   }
 
   describe('deposit', () => {
@@ -128,16 +130,15 @@ describe('ZkMixer', () => {
 
   describe.only('withdraw', () => {
     it('should withdraw type 1', async () => {
+      const depositType = Field(1);
       // deposit type 1
-      await deposit(Field(1), user);
+      const { userNonce, nullifier } = await deposit(Field(1), user);
 
-      // get balances before withdraw
+      // get balances
+
       const initialUserBalance = Mina.getBalance(user).toBigInt();
       const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
 
-      const userAccount = Mina.getAccount(user);
-      const userNonce = userAccount.nonce;
-      const nullifier = Field.random();
       const commitment = Poseidon.hash(
         [userNonce.toFields(), nullifier, Field(1)].flat()
       );
@@ -164,14 +165,24 @@ describe('ZkMixer', () => {
       const finalUserBalance = Mina.getBalance(user).toBigInt();
       const finalSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
 
-      // compare the root of the smart contract tree to our local tree
-      expect(userCommitments.getRoot()).toStrictEqual(
-        zkMixer.commitmentsRoot.get()
+      userNullifierHashes.set(nullifier, Field(1));
+
+      // compare the nullifier tree to our local tree
+      console.log(
+        'userNullifierHashes offchain',
+        userNullifierHashes.getRoot()
+      );
+      console.log(
+        'zkMixer.nullifierHashesRoot onchain',
+        zkMixer.nullifierHashesRoot.get()
+      );
+      expect(userNullifierHashes.getRoot()).toStrictEqual(
+        zkMixer.nullifierHashesRoot.get()
       );
       expect(finalUserBalance).toEqual(
-        initialUserBalance + Field(1).toBigInt()
+        initialUserBalance + depositType.toBigInt()
       );
-      expect(finalSCBalance).toEqual(initialSCBalance - Field(1).toBigInt());
+      expect(finalSCBalance).toEqual(initialSCBalance - depositType.toBigInt());
     });
   });
 });
