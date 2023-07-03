@@ -8,6 +8,8 @@ import {
   AccountUpdate,
   UInt64,
   Poseidon,
+  Circuit,
+  Int64,
 } from 'snarkyjs';
 
 export class zkMixer extends SmartContract {
@@ -29,7 +31,7 @@ export class zkMixer extends SmartContract {
     key.assertEquals(commitment);
 
     // compute the root after incrementing
-    const deposited = Field(1); // Find a way to put the amount also here
+    const deposited = Field(amount); //  1 2 or 3
     const [newRoot, _] = witness.computeRootAndKey(deposited);
 
     this.commitmentRoot.set(newRoot);
@@ -59,9 +61,19 @@ export class zkMixer extends SmartContract {
     key.assertEquals(commitmentCalculated);
 
     // check that the commitment is in the tree
-    const deposited = Field(1);
+    const deposited = Field(amount);
     const [oldRootCommitment, keyCommitment] =
       commitmentWitness.computeRootAndKey(deposited);
+
+    let amountToWithdraw = Circuit.switch(
+      [
+        Circuit.equal(amount, Field(1)),
+        Circuit.equal(amount, Field(2)),
+        Circuit.equal(amount, Field(3)),
+      ],
+      Int64,
+      [10, 20, 30] // we should crash if amount is not equal 1, 2 or 3 (on arg or because onchain isn't equal to), not implemented yet
+    );
 
     oldRootCommitment.assertEquals(this.commitmentRoot.get());
     keyCommitment.assertEquals(commitmentCalculated);
@@ -71,6 +83,6 @@ export class zkMixer extends SmartContract {
     const [newNullifierRoot, _] = nullifierWitness.computeRootAndKey(spent);
     this.commitmentRoot.set(newNullifierRoot);
 
-    this.send({ to: this.sender, amount: 10 });
+    this.send({ to: this.sender, amount: amountToWithdraw });
   }
 }
