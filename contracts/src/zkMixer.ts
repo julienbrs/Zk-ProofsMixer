@@ -21,7 +21,7 @@ export class zkMixer extends SmartContract {
     this.nullifierRoot.set(initialRoot);
   }
 
-  deposit(amount: Field, commitment: Field, witness: MerkleMapWitness) {
+  deposit(amountToSend: bigint, commitment: Field, witness: MerkleMapWitness) {
     this.commitmentRoot.getAndAssertEquals();
 
     const notDeposited = Field(0);
@@ -31,17 +31,17 @@ export class zkMixer extends SmartContract {
     key.assertEquals(commitment);
 
     // compute the root after incrementing
-    const deposited = Field(amount); //  1 2 or 3
+    const deposited = Field(amountToSend); //  1 2 or 3
     const [newRoot, _] = witness.computeRootAndKey(deposited);
 
     this.commitmentRoot.set(newRoot);
 
     const sendingAccount = AccountUpdate.createSigned(this.sender);
-    sendingAccount.send({ to: this.address, amount: 10 });
+    sendingAccount.send({ to: this.address, amount: amountToSend }); // TODO: update to amount
   }
 
   withdraw(
-    amount: Field,
+    amountToWithdraw: bigint,
     nullifier: Field,
     nullifierWitness: MerkleMapWitness,
     commitmentWitness: MerkleMapWitness,
@@ -61,21 +61,13 @@ export class zkMixer extends SmartContract {
     key.assertEquals(commitmentCalculated);
 
     // check that the commitment is in the tree
-    const deposited = Field(amount);
-    const [oldRootCommitment, keyCommitment] =
+    const deposited = Field(amountToWithdraw);
+    const [expectedRootCommitment, keyCommitment] =
       commitmentWitness.computeRootAndKey(deposited);
 
-    let amountToWithdraw = Circuit.switch(
-      [
-        Circuit.equal(amount, Field(1)),
-        Circuit.equal(amount, Field(2)),
-        Circuit.equal(amount, Field(3)),
-      ],
-      Int64,
-      [10, 20, 30] // we should crash if amount is not equal 1, 2 or 3 (on arg or because onchain isn't equal to), not implemented yet
-    );
+    // Put field(0) or field(1) or field(2) in the tree and check what value is correct
 
-    oldRootCommitment.assertEquals(this.commitmentRoot.get());
+    expectedRootCommitment.assertEquals(this.commitmentRoot.get());
     keyCommitment.assertEquals(commitmentCalculated);
 
     // Consuming the commitment
