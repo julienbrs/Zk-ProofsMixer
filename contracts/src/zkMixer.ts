@@ -10,6 +10,9 @@ import {
   Provable,
   UInt32,
   UInt64,
+  Int64,
+  Bool,
+  Circuit,
 } from 'snarkyjs';
 
 export class ZkMixer extends SmartContract {
@@ -46,12 +49,18 @@ export class ZkMixer extends SmartContract {
     this.commitmentsRoot.set(rootAfter);
 
     const sendingAccount = AccountUpdate.createSigned(this.sender);
-    const amountToSend = Provable.switch(
-      [1, 2, 3].map((i) => depositType.equals(i)),
-      UInt64,
-      [new UInt64(1), new UInt64(5), new UInt64(10)]
-    );
-    sendingAccount.send({ to: this.address, amount: amountToSend });
+
+    // calculate the amount to deposit
+    const whatTypeBool: Bool[] = [1, 2, 3].map((i) => depositType.equals(i));
+    const amountToDepositField: Field = Provable.switch(whatTypeBool, Field, [
+      Field(1),
+      Field(5),
+      Field(10),
+    ]);
+    const amountToDeposit: UInt64 = new UInt64(amountToDepositField);
+
+    // send the funds to the contract
+    sendingAccount.send({ to: this.address, amount: amountToDeposit });
   }
 
   @method withdraw(
@@ -91,13 +100,16 @@ export class ZkMixer extends SmartContract {
     const [newNullifierRoot, _] = nullifierWitness.computeRootAndKey(spent);
     this.commitmentsRoot.set(newNullifierRoot);
 
-    // Withdraw funds
-    const amountToWithdraw = Provable.switch(
-      [1, 2, 3].map((i) => depositType.equals(i)),
-      Field,
-      [Field(1), Field(5), Field(10)]
-    );
+    // Calculate the amount to withdraw
+    const whatTypeBool: Bool[] = [1, 2, 3].map((i) => depositType.equals(i));
+    const amountToWithdrawField: Field = Provable.switch(whatTypeBool, Field, [
+      Field(1),
+      Field(5),
+      Field(10),
+    ]);
+    const amountToWithdraw: UInt64 = new UInt64(amountToWithdrawField);
 
-    this.send({ to: this.sender, amount: amountToWithdraw.toBigInt() });
+    // Withdraw funds
+    this.send({ to: this.sender, amount: amountToWithdraw });
   }
 }

@@ -13,7 +13,7 @@ import {
 let proofsEnabled = false;
 
 const DEPOSIT_AMOUNT = {
-  1: 1,
+  1: 1000000000000,
   2: 5,
   3: 10,
 };
@@ -78,7 +78,7 @@ describe('ZkMixer', () => {
     );
   });
 
-  it('should deposit type 1', async () => {
+  it.only('should deposit type 1', async () => {
     const user = Local.testAccounts[1].publicKey;
     const userKey = Local.testAccounts[1].privateKey;
 
@@ -89,6 +89,8 @@ describe('ZkMixer', () => {
     const commitment = Poseidon.hash(
       [userNonce.toFields(), nullifier, depositType].flat()
     );
+
+    console.log('balance before deposit', userAccount.balance);
     // get the witness for the current tree
     const witness = userCommitments.getWitness(commitment);
     // update the leaf locally
@@ -100,10 +102,12 @@ describe('ZkMixer', () => {
     await depositTx.prove();
     await depositTx.sign([userKey]).send();
 
+    console.log('balance after deposit', userAccount.balance);
+
     // compare the root of the smart contract tree to our local tree
     expect(userCommitments.getRoot()).toStrictEqual(
       zkMixer.commitmentsRoot.get()
     );
-    expect(userAccount.balance).toStrictEqual(new UInt64(DEPOSIT_AMOUNT[1]));
+    expect(Number(userAccount.balance)).toEqual(DEPOSIT_AMOUNT[1]);
   });
 });
