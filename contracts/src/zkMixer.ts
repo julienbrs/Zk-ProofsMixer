@@ -10,6 +10,7 @@ import {
   Poseidon,
   Circuit,
   Int64,
+  Bool,
 } from 'snarkyjs';
 
 export class zkMixer extends SmartContract {
@@ -51,6 +52,15 @@ export class zkMixer extends SmartContract {
     this.commitmentRoot.getAndAssertEquals();
     this.nullifierRoot.getAndAssertEquals();
 
+    /* Can we do that or we need to use a circuit? */
+    // const amountField = Field(amountToWithdraw);
+    // const isOne = amountField.equals(Field(1));
+    // const isTwo = amountField.equals(Field(2));
+    // const isThree = amountField.equals(Field(3));
+
+    // const isValidAmount = isOne.or(isTwo).or(isThree);
+    // isValidAmount.assertTrue();
+
     // check that the nullifier is not already spent
     const notSpent = Field(0);
     const [oldRootNullifier, key] =
@@ -64,8 +74,6 @@ export class zkMixer extends SmartContract {
     const deposited = Field(amountToWithdraw);
     const [expectedRootCommitment, keyCommitment] =
       commitmentWitness.computeRootAndKey(deposited);
-
-    // Put field(0) or field(1) or field(2) in the tree and check what value is correct
 
     expectedRootCommitment.assertEquals(this.commitmentRoot.get());
     keyCommitment.assertEquals(commitmentCalculated);
