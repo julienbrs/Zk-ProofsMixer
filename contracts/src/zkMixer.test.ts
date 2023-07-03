@@ -90,21 +90,21 @@ describe('ZkMixer', () => {
     return { userNonce, nullifier };
   }
 
+  it('should deploy', () => {
+    expect(zkMixer).toBeDefined();
+  });
+
+  it('should initialize', () => {
+    const initialCommitmentsRoot = zkMixer.commitmentsRoot.get();
+    const initialNullifierHashesRoot = zkMixer.nullifierHashesRoot.get();
+
+    expect(initialCommitmentsRoot).toStrictEqual(userCommitments.getRoot());
+    expect(initialNullifierHashesRoot).toStrictEqual(
+      userNullifierHashes.getRoot()
+    );
+  });
+
   describe('deposit', () => {
-    it('should deploy', () => {
-      expect(zkMixer).toBeDefined();
-    });
-
-    it('should initialize', () => {
-      const initialCommitmentsRoot = zkMixer.commitmentsRoot.get();
-      const initialNullifierHashesRoot = zkMixer.nullifierHashesRoot.get();
-
-      expect(initialCommitmentsRoot).toStrictEqual(userCommitments.getRoot());
-      expect(initialNullifierHashesRoot).toStrictEqual(
-        userNullifierHashes.getRoot()
-      );
-    });
-
     it('should deposit type 1', async () => {
       // get initial balances
       const initialUserBalance = Mina.getBalance(user).toBigInt();
