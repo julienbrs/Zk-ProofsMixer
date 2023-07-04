@@ -134,7 +134,7 @@ describe('ZkMixer', () => {
       );
     });
     await withdrawTx.prove();
-    await withdrawTx.sign([userKey]).send();
+    await withdrawTx.sign([deployerKey]).send();
 
     userNullifierHashes.set(nullifier, Field(1));
   }
