@@ -97,19 +97,53 @@ export default class ZkappWorkerClient {
 
   nextId: number;
 
+  isReady: boolean;
+
+  async waitUntilReady() {
+    if (!this.isReady) {
+      // send a message to the worker to check if it's ready
+      this.worker.postMessage({ id: -1, fn: "isReady" });
+
+      // when we get a response, set isReady to true
+      const handleReady = (event: MessageEvent<ZkappWorkerReponse>) => {
+        if (event.data.id === -1) {
+          this.isReady = true;
+        }
+      };
+      this.worker.addEventListener("message", handleReady);
+
+      // while we're not ready, wait 100ms and check again
+      await new Promise((resolve) => {
+        const interval = setInterval(() => {
+          if (this.isReady) {
+            clearInterval(interval);
+            this.worker.removeEventListener("message", handleReady);
+            resolve(null);
+          } else {
+            this.worker.postMessage({ id: -1, fn: "isReady" });
+          }
+        }, 100);
+      });
+    }
+  }
+
   constructor() {
-    this.worker = new Worker(new URL("./zkappWorker.ts", import.meta.url));
+    this.worker = new Worker(new URL("./zkappWorker.ts", import.meta.url), { type: "module" });
     this.promises = {};
     this.nextId = 0;
+    this.isReady = false;
 
-    this.worker.onmessage = (event: MessageEvent<ZkappWorkerReponse>) => {
-      this.promises[event.data.id].resolve(event.data.data);
-      delete this.promises[event.data.id];
-    };
+    this.waitUntilReady().then(() => {
+      this.worker.onmessage = (event: MessageEvent<ZkappWorkerReponse>) => {
+        this.promises[event.data.id].resolve(event.data.data);
+        delete this.promises[event.data.id];
+      };
+    });
   }
 
   _call(fn: WorkerFunctions, args: any) {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
+      await this.waitUntilReady();
       this.promises[this.nextId] = { resolve, reject };
 
       const message: ZkappWorkerRequest = {
