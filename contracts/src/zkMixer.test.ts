@@ -123,6 +123,7 @@ describe('ZkMixer', () => {
     // update the leaf locally
     userCommitments.set(commitment, Field(1));
 
+    const callerKey = caller === deployer ? deployerKey : userKey;
     const withdrawTx = await Mina.transaction(caller, () => {
       zkMixer.withdraw(
         nullifier,
@@ -134,7 +135,7 @@ describe('ZkMixer', () => {
       );
     });
     await withdrawTx.prove();
-    await withdrawTx.sign([deployerKey]).send();
+    await withdrawTx.sign([callerKey]).send();
 
     userNullifierHashes.set(nullifier, Field(1));
   }
@@ -437,7 +438,7 @@ describe('ZkMixer', () => {
 
         // deployer withdraws to him
         await expect(
-          withdraw(userNonce, nullifier, deployer, depositType, deployer)
+          withdraw(userNonce, nullifier, user, depositType, deployer)
         ).rejects.toThrow();
       });
     });
