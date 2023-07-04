@@ -14,11 +14,11 @@ import {
 
 let proofsEnabled = false;
 
-const DEPOSIT_AMOUNT = {
-  1: 1000000000000,
-  2: 5,
-  3: 10,
-};
+const DEPOSIT_AMOUNT: Array<bigint> = [
+  BigInt(100000),
+  BigInt(500000),
+  BigInt(1000000),
+];
 
 describe('ZkMixer', () => {
   let zkMixer: ZkMixer,
@@ -154,14 +154,57 @@ describe('ZkMixer', () => {
       expect(userCommitments.getRoot()).toStrictEqual(
         zkMixer.commitmentsRoot.get()
       );
-      expect(finalUserBalance).toEqual(
-        initialUserBalance - depositType.toBigInt()
+      expect(finalUserBalance).toEqual(initialUserBalance - DEPOSIT_AMOUNT[0]);
+      expect(finalSCBalance).toEqual(initialSCBalance + DEPOSIT_AMOUNT[0]);
+    });
+
+    it('should not deposit with zero balance', async () => {
+      const depositType = Field(1);
+
+      // account empty without balance
+      let transferTx = await Mina.transaction(user, () => {
+        AccountUpdate.createSigned(user).send({
+          to: deployer,
+          amount: 999999999999n,
+        });
+      });
+      await transferTx.prove();
+      await transferTx.sign([userKey]).send();
+      await expect(deposit(depositType, user)).rejects.toThrow();
+    });
+
+    it('should not deposit with invalid deposit type', async () => {
+      const depositType = Field(4); // An invalid deposit type
+
+      await expect(deposit(depositType, user)).rejects.toThrow(Error);
+    });
+
+    it('should fail when doing twice the same commitment', async () => {
+      const depositType = Field(1);
+      const { userNonce, nullifier } = await deposit(depositType, user);
+
+      // calculate the same commitment again
+      const sameCommitment = Poseidon.hash(
+        [userNonce.toFields(), nullifier, depositType].flat()
       );
-      expect(finalSCBalance).toEqual(initialSCBalance + depositType.toBigInt());
+      const commitmentWitness = userCommitments.getWitness(sameCommitment);
+
+      try {
+        const sameDepositTx = await Mina.transaction(user, () => {
+          zkMixer.deposit(sameCommitment, commitmentWitness, depositType);
+        });
+        await sameDepositTx.prove();
+        await sameDepositTx.sign([userKey]).send();
+        expect(false).toBe(true); // If we reach this line, the test should fail
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (error: any) {
+        expect(error.message).toContain('Field.assertEquals():');
+      }
     });
   });
 
-  describe.only('withdraw', () => {
+  describe('withdraw', () => {
     it('should withdraw type 1', async () => {
       // deposit type 1
       const depositType = Field(1);
@@ -183,56 +226,66 @@ describe('ZkMixer', () => {
         zkMixer.nullifierHashesRoot.get()
       );
       // check balances
-      expect(finalUserBalance).toEqual(
-        initialUserBalance + depositType.toBigInt()
-      );
-      expect(finalSCBalance).toEqual(initialSCBalance - depositType.toBigInt());
+      expect(finalUserBalance).toEqual(initialUserBalance + DEPOSIT_AMOUNT[0]);
+      expect(finalSCBalance).toEqual(initialSCBalance - DEPOSIT_AMOUNT[0]);
     });
-
-    it('should not deposit with zero balance', async () => {
+    it('should not allow withdrawal without deposit', async () => {
       const depositType = Field(1);
-      const initialUserBalance = Mina.getBalance(user).toBigInt();
-      console.log('initialUserBalance', initialUserBalance);
+      const nullifier = Field.random();
+      const userNonce = Mina.getAccount(user).nonce;
 
-      // account empty without balance
-      let transferTx = await Mina.transaction(user, () => {
-        AccountUpdate.createSigned(user).send({
-          to: deployer,
-          amount: 999999999999n,
-        });
-      });
-      await transferTx.prove();
-      await transferTx.sign([userKey]).send();
-      await expect(deposit(depositType, user)).rejects.toThrow();
+      await expect(
+        withdraw(userNonce, nullifier, user, depositType)
+      ).rejects.toThrow();
     });
 
-    it('should not deposit with invalid deposit type', async () => {
-      const depositType = Field(4); // An invalid deposit type
-
-      await expect(deposit(depositType, user)).rejects.toThrow(Error);
-    });
-
-    it.only('should fail on depositing already deposited commitment', async () => {
+    it('should not allow double spending', async () => {
       const depositType = Field(1);
       const { userNonce, nullifier } = await deposit(depositType, user);
 
-      // calculate the same commitment again
-      const commitment = Poseidon.hash(
-        [userNonce.toFields(), nullifier, depositType].flat()
-      );
-      const commitmentWitness = userCommitments.getWitness(commitment);
+      // First withdrawal should succeed
+      await withdraw(userNonce, nullifier, user, depositType);
 
-      try {
-        const depositTxn2 = await Mina.transaction(user, () => {
-          zkMixer.deposit(commitment, commitmentWitness, depositType);
-        });
-        await depositTxn2.prove();
-        await depositTxn2.sign([userKey]).send();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (error: any) {
-        expect(error.message).toContain('Field.assertEquals():');
-      }
-      expect(false).toBe(true); // If we reach this line, the test should fail
+      // Second withdrawal attempt with the same nullifier should fail
+      await expect(
+        withdraw(userNonce, nullifier, user, depositType)
+      ).rejects.toThrow();
+    });
+
+    it('should not allow withdrawal of different type', async () => {
+      const depositType = Field(1);
+      const differentWithdrawType = Field(2);
+      const { userNonce, nullifier } = await deposit(depositType, user);
+
+      // Attempt to withdraw a different type than what was deposited
+      await expect(
+        withdraw(userNonce, nullifier, user, differentWithdrawType)
+      ).rejects.toThrow();
+    });
+
+    it('should not allow withdrawal of invalid type', async () => {
+      const depositType = Field(4); // Invalid type
+      const userNonce = Mina.getAccount(user).nonce;
+      const nullifier = Field.random();
+
+      // Attempt to deposit an invalid type
+      await expect(deposit(depositType, user)).rejects.toThrow();
+
+      // Attempt to withdraw an invalid type
+      await expect(
+        withdraw(userNonce, nullifier, user, depositType)
+      ).rejects.toThrow();
+    });
+
+    it('should not allow withdrawal with invalid nullifier', async () => {
+      const depositType = Field(1);
+      const { userNonce } = await deposit(depositType, user);
+      const nullifier = Field.random();
+
+      // Attempt to withdraw with an invalid nullifier
+      await expect(
+        withdraw(userNonce, nullifier, user, depositType)
+      ).rejects.toThrow();
     });
   });
 });
