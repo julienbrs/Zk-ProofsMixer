@@ -12,12 +12,11 @@ import {
   UInt64,
   Bool,
   Permissions,
-  PublicKey,
 } from 'snarkyjs';
 
 export class ZkMixer extends SmartContract {
   @state(Field) commitmentsRoot = State<Field>();
-  @state(Field) nullifierHashesRoot = State<Field>(); // It's not nullifier but hash(nullifier)
+  @state(Field) nullifierHashesRoot = State<Field>();
 
   init() {
     super.init();
@@ -31,11 +30,19 @@ export class ZkMixer extends SmartContract {
     this.nullifierHashesRoot.set(initialNullifierRoot);
   }
 
+  /**
+   * Deposit funds into the contract
+   *
+   * @param commitment of the deposit
+   * @param witness of the commitment
+   * @param depositType of the deposit. Should be 1, 2 or 3
+   */
   @method deposit(
     commitment: Field,
     witness: MerkleMapWitness,
     depositType: Field
   ) {
+    // make sure that the deposit type is between 1 and 3
     depositType.assertGreaterThanOrEqual(Field(1));
     depositType.assertLessThanOrEqual(Field(3));
 
@@ -43,19 +50,17 @@ export class ZkMixer extends SmartContract {
     this.commitmentsRoot.assertEquals(initialRoot);
 
     // check the initial state matches what we expect
-    const notDeposited = Field(0);
+    const notDeposited = Field(0); // 0 means not deposited
     const [rootBefore, key] = witness.computeRootAndKey(notDeposited);
-    rootBefore.assertEquals(initialRoot);
+    rootBefore.assertEquals(initialRoot); // check the root matches
 
-    key.assertEquals(commitment);
+    key.assertEquals(commitment); // check the commitment is in the tree
 
-    // compute the root after incrementing
+    // compute the root after the deposit
     const [rootAfter, _] = witness.computeRootAndKey(depositType);
 
     // set the new root
     this.commitmentsRoot.set(rootAfter);
-
-    const sendingAccount = AccountUpdate.createSigned(this.sender);
 
     // calculate the amount to deposit
     const whatTypeBool: Bool[] = [1, 2, 3].map((i) => depositType.equals(i));
@@ -67,6 +72,7 @@ export class ZkMixer extends SmartContract {
     const amountToDeposit: UInt64 = new UInt64(amountToDepositField);
 
     // send the funds to the contract
+    const sendingAccount = AccountUpdate.createSigned(this.sender);
     sendingAccount.send({ to: this.address, amount: amountToDeposit });
   }
 
@@ -106,7 +112,8 @@ export class ZkMixer extends SmartContract {
       nullifierWitness.computeRootAndKey(notSpent);
     oldRootNullifier.assertEquals(this.nullifierHashesRoot.get());
 
-    key.assertEquals(nullifier);
+    const hashedNullifier = Poseidon.hash([nullifier]);
+    key.assertEquals(hashedNullifier);
 
     const commitmentCalculated = Poseidon.hash(
       [nonce.toFields(), nullifier, depositType, specificAddressField].flat()

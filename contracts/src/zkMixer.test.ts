@@ -139,9 +139,12 @@ describe('ZkMixer', () => {
       [oldNonce.toFields(), nullifier, Field(1), addressToWithdrawField].flat()
     );
 
+    // hash the nullifier
+    const nullifierHashed = Poseidon.hash([nullifier]);
+
     // get witnesses for the current tree...
     const commitmentWitness = commitmentMap.getWitness(expectedCommitment);
-    const nullifierWitness = nullifierHashedMap.getWitness(nullifier);
+    const nullifierWitness = nullifierHashedMap.getWitness(nullifierHashed);
     // ... and update the leaf locally
     commitmentMap.set(expectedCommitment, Field(1));
 
@@ -163,7 +166,7 @@ describe('ZkMixer', () => {
     await withdrawTx.sign([callerKey]).send();
 
     // update the nullifier hash map if the withdrawal was successful
-    nullifierHashedMap.set(nullifier, Field(1));
+    nullifierHashedMap.set(nullifierHashed, Field(1));
   }
 
   it('should deploy', () => {
