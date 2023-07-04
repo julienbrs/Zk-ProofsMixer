@@ -76,10 +76,25 @@ export class ZkMixer extends SmartContract {
     commitmentWitness: MerkleMapWitness,
     nonce: UInt32,
     depositType: Field,
-    specificAddress: Field
+    specificAddressField: Field
   ) {
     depositType.assertGreaterThanOrEqual(Field(1));
     depositType.assertLessThanOrEqual(Field(3));
+
+    const isFeatureEnabled: Bool = Provable.if(
+      specificAddressField.equals(Field(0)), // true if desactivated
+      new Bool(false),
+      new Bool(true)
+    );
+
+    const isAddressValid: Bool = Provable.if(
+      isFeatureEnabled,
+      specificAddressField.equals(this.sender.toFields()[0]),
+      new Bool(true) // always true if desactivated
+    );
+
+    // crash if the address is not valid
+    isAddressValid.assertTrue();
 
     // check onchain state matches
     this.commitmentsRoot.getAndAssertEquals();
@@ -94,7 +109,7 @@ export class ZkMixer extends SmartContract {
     key.assertEquals(nullifier);
 
     const commitmentCalculated = Poseidon.hash(
-      [nonce.toFields(), nullifier, depositType, specificAddress].flat()
+      [nonce.toFields(), nullifier, depositType, specificAddressField].flat()
     );
     // check that the commitment is in the tree
     const [expectedRootCommitment, keyCommitment] =

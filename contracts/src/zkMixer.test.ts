@@ -100,14 +100,21 @@ describe('ZkMixer', () => {
   }
 
   async function withdraw(
-    userNonce: UInt32,
+    callerNonce: UInt32,
     nullifier: Field,
-    user: PublicKey,
+    caller: PublicKey,
     depositType: Field,
-    specificAddress: Field = Field(0)
+    specificAddress: PublicKey | null
   ) {
+    let specificAddressField: Field;
+    if (specificAddress !== null) {
+      specificAddressField = specificAddress.toFields()[0];
+    } else {
+      specificAddressField = Field(0);
+    }
+
     const commitment = Poseidon.hash(
-      [userNonce.toFields(), nullifier, Field(1), specificAddress].flat()
+      [callerNonce.toFields(), nullifier, Field(1), specificAddressField].flat()
     );
 
     // get the witness for the current tree
@@ -116,14 +123,14 @@ describe('ZkMixer', () => {
     // update the leaf locally
     userCommitments.set(commitment, Field(1));
 
-    const withdrawTx = await Mina.transaction(user, () => {
+    const withdrawTx = await Mina.transaction(caller, () => {
       zkMixer.withdraw(
         nullifier,
         nullifierWitness,
         commitmentWitness,
-        userNonce,
+        callerNonce,
         depositType,
-        specificAddress
+        specificAddressField
       );
     });
     await withdrawTx.prove();
@@ -212,40 +219,56 @@ describe('ZkMixer', () => {
       }
     });
 
-    it("shouldn't be able to withdraw to the same wallet with lockWalletAddress feature enabled", async () => {
-      const depositType = Field(1);
-      const withdrawAddressField = user.toFields()[0];
+    describe('feature: lockAddress', () => {
+      it('should deposit when lockAddress is defined and is sender address', async () => {
+        const depositType = Field(1);
+        const withdrawAddressField = user.toFields()[0];
 
-      const { userNonce, nullifier } = await deposit(
-        depositType,
-        user,
-        withdrawAddressField
-      );
+        // get initial balances
+        const initialUserBalance = Mina.getBalance(user).toBigInt();
+        const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
 
-      // get initial balances
-      const initialUserBalance = Mina.getBalance(user).toBigInt();
-      const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+        await deposit(depositType, user, withdrawAddressField);
 
-      // withdraw type 1
-      await withdraw(
-        userNonce,
-        nullifier,
-        user,
-        depositType,
-        withdrawAddressField
-      );
+        // get final balances
+        const finalUserBalance = Mina.getBalance(user).toBigInt();
+        const finalSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
 
-      // get final balances
-      const finalUserBalance = Mina.getBalance(user).toBigInt();
-      const finalSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+        // compare the nullifier tree to our local tree
+        expect(userNullifierHashes.getRoot()).toStrictEqual(
+          zkMixer.nullifierHashesRoot.get()
+        );
+        // check balances
+        expect(finalUserBalance).toEqual(
+          initialUserBalance - DEPOSIT_AMOUNT[0]
+        );
+        expect(finalSCBalance).toEqual(initialSCBalance + DEPOSIT_AMOUNT[0]);
+      });
 
-      // compare the nullifier tree to our local tree
-      expect(userNullifierHashes.getRoot()).toStrictEqual(
-        zkMixer.nullifierHashesRoot.get()
-      );
-      // check balances
-      expect(finalUserBalance).toEqual(initialUserBalance);
-      expect(finalSCBalance).toEqual(initialSCBalance);
+      it('should deposit when lockAddress is defined and different from sender address', async () => {
+        const depositType = Field(1);
+        const withdrawAddressField = deployer.toFields()[0];
+
+        // get initial balances
+        const initialUserBalance = Mina.getBalance(user).toBigInt();
+        const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+
+        await deposit(depositType, user, withdrawAddressField);
+
+        // get final balances
+        const finalUserBalance = Mina.getBalance(user).toBigInt();
+        const finalSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+
+        // compare the nullifier tree to our local tree
+        expect(userNullifierHashes.getRoot()).toStrictEqual(
+          zkMixer.nullifierHashesRoot.get()
+        );
+        // check balances
+        expect(finalUserBalance).toEqual(
+          initialUserBalance - DEPOSIT_AMOUNT[0]
+        );
+        expect(finalSCBalance).toEqual(initialSCBalance + DEPOSIT_AMOUNT[0]);
+      });
     });
   });
 
@@ -260,7 +283,7 @@ describe('ZkMixer', () => {
       const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
 
       // withdraw type 1
-      await withdraw(userNonce, nullifier, user, depositType);
+      await withdraw(userNonce, nullifier, user, depositType, null);
 
       // get final balances
       const finalUserBalance = Mina.getBalance(user).toBigInt();
@@ -280,7 +303,7 @@ describe('ZkMixer', () => {
       const userNonce = Mina.getAccount(user).nonce;
 
       await expect(
-        withdraw(userNonce, nullifier, user, depositType)
+        withdraw(userNonce, nullifier, user, depositType, null)
       ).rejects.toThrow();
     });
 
@@ -289,11 +312,11 @@ describe('ZkMixer', () => {
       const { userNonce, nullifier } = await deposit(depositType, user);
 
       // First withdrawal should succeed
-      await withdraw(userNonce, nullifier, user, depositType);
+      await withdraw(userNonce, nullifier, user, depositType, null);
 
       // Second withdrawal attempt with the same nullifier should fail
       await expect(
-        withdraw(userNonce, nullifier, user, depositType)
+        withdraw(userNonce, nullifier, user, depositType, null)
       ).rejects.toThrow();
     });
 
@@ -304,7 +327,7 @@ describe('ZkMixer', () => {
 
       // Attempt to withdraw a different type than what was deposited
       await expect(
-        withdraw(userNonce, nullifier, user, differentWithdrawType)
+        withdraw(userNonce, nullifier, user, differentWithdrawType, null)
       ).rejects.toThrow();
     });
 
@@ -318,7 +341,7 @@ describe('ZkMixer', () => {
 
       // Attempt to withdraw an invalid type
       await expect(
-        withdraw(userNonce, nullifier, user, depositType)
+        withdraw(userNonce, nullifier, user, depositType, null)
       ).rejects.toThrow();
     });
 
@@ -329,8 +352,94 @@ describe('ZkMixer', () => {
 
       // Attempt to withdraw with an invalid nullifier
       await expect(
-        withdraw(userNonce, nullifier, user, depositType)
+        withdraw(userNonce, nullifier, user, depositType, null)
       ).rejects.toThrow();
+    });
+    describe('feature: lockAddress', () => {
+      it('user deposit and plan to withdraw to user. user should be able to withdraw', async () => {
+        const depositType = Field(1);
+        const withdrawAddressField = user.toFields()[0];
+
+        // get initial balances
+        const initialUserBalance = Mina.getBalance(user).toBigInt();
+        const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+
+        // specific address expected is user
+        const { userNonce, nullifier } = await deposit(
+          depositType,
+          user,
+          withdrawAddressField
+        );
+
+        // try to withdraw to deployer when lockAddress is user
+        await withdraw(userNonce, nullifier, user, depositType, user);
+
+        // get final balances
+        const finalUserBalance = Mina.getBalance(user).toBigInt();
+        const finalSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+
+        // compare the nullifier tree to our local tree
+        expect(userNullifierHashes.getRoot()).toStrictEqual(
+          zkMixer.nullifierHashesRoot.get()
+        );
+        // check balances
+        expect(finalUserBalance).toEqual(initialUserBalance);
+        expect(finalSCBalance).toEqual(initialSCBalance);
+      });
+
+      it('user deposit and plan to withdraw to deployer. Deployer should be able to withdraw', async () => {
+        const depositType = Field(1);
+        const withdrawAddressField = deployer.toFields()[0];
+
+        // get initial balances
+        const initialUserBalance = Mina.getBalance(user).toBigInt();
+        const initialDeployerBalance = Mina.getBalance(deployer).toBigInt();
+        const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+
+        // specific address expected is deployer
+        const { userNonce, nullifier } = await deposit(
+          depositType,
+          user,
+          withdrawAddressField
+        );
+
+        // deployer withdraws to him
+        await withdraw(userNonce, nullifier, deployer, depositType, deployer);
+
+        // get final balances
+        const finalUserBalance = Mina.getBalance(user).toBigInt();
+        const finalDeployerBalance = Mina.getBalance(deployer).toBigInt();
+        const finalSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+
+        // compare the nullifier tree to our local tree
+        expect(userNullifierHashes.getRoot()).toStrictEqual(
+          zkMixer.nullifierHashesRoot.get()
+        );
+        // check balances
+        expect(finalUserBalance).toEqual(
+          initialUserBalance - DEPOSIT_AMOUNT[0]
+        );
+        expect(finalDeployerBalance).toEqual(
+          initialDeployerBalance + DEPOSIT_AMOUNT[0]
+        );
+        expect(finalSCBalance).toEqual(initialSCBalance);
+      });
+
+      it('user deposit and plan to withdraw to deployer. user should not be able to withdraw', async () => {
+        const depositType = Field(1);
+        const withdrawAddressField = deployer.toFields()[0];
+        // specific address expected is deployer
+        const { userNonce, nullifier } = await deposit(
+          depositType,
+          user,
+          withdrawAddressField
+        );
+
+        // deployer withdraws to him
+        await expect(
+          withdraw(userNonce, nullifier, deployer, depositType, deployer)
+        ).rejects.toThrow();
+      });
     });
   });
 });
