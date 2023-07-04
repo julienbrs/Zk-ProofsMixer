@@ -75,7 +75,8 @@ export class ZkMixer extends SmartContract {
     nullifierWitness: MerkleMapWitness,
     commitmentWitness: MerkleMapWitness,
     nonce: UInt32,
-    depositType: Field
+    depositType: Field,
+    specificAddress: Field
   ) {
     depositType.assertGreaterThanOrEqual(Field(1));
     depositType.assertLessThanOrEqual(Field(3));
@@ -93,7 +94,7 @@ export class ZkMixer extends SmartContract {
     key.assertEquals(nullifier);
 
     const commitmentCalculated = Poseidon.hash(
-      [nonce.toFields(), nullifier, depositType].flat()
+      [nonce.toFields(), nullifier, depositType, specificAddress].flat()
     );
     // check that the commitment is in the tree
     const [expectedRootCommitment, keyCommitment] =
