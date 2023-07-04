@@ -11,7 +11,8 @@ import {
   UInt32,
   UInt64,
   Bool,
-  Permissions
+  Permissions,
+  PublicKey,
 } from 'snarkyjs';
 
 export class ZkMixer extends SmartContract {
@@ -59,9 +60,9 @@ export class ZkMixer extends SmartContract {
     // calculate the amount to deposit
     const whatTypeBool: Bool[] = [1, 2, 3].map((i) => depositType.equals(i));
     const amountToDepositField: Field = Provable.switch(whatTypeBool, Field, [
-      Field(1),
-      Field(5),
-      Field(10),
+      Field(100000),
+      Field(500000),
+      Field(1000000),
     ]);
     const amountToDeposit: UInt64 = new UInt64(amountToDepositField);
 
@@ -110,9 +111,9 @@ export class ZkMixer extends SmartContract {
     // Calculate the amount to withdraw
     const whatTypeBool: Bool[] = [1, 2, 3].map((i) => depositType.equals(i));
     const amountToWithdrawField: Field = Provable.switch(whatTypeBool, Field, [
-      Field(1),
-      Field(5),
-      Field(10),
+      Field(100000),
+      Field(500000),
+      Field(1000000),
     ]);
     const amountToWithdraw: UInt64 = new UInt64(amountToWithdrawField);
 

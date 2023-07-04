@@ -1,5 +1,6 @@
 import { ZkMixer } from './zkMixer';
 import {
+  Account,
   AccountUpdate,
   Field,
   MerkleMap,
@@ -26,8 +27,8 @@ describe('ZkMixer', () => {
     userCommitments: MerkleMap,
     userNullifierHashes: MerkleMap,
     Local: any,
-    sender: PublicKey,
-    senderKey: PrivateKey,
+    deployer: PublicKey,
+    deployerKey: PrivateKey,
     user: PublicKey,
     userKey: PrivateKey;
 
@@ -40,8 +41,8 @@ describe('ZkMixer', () => {
   beforeEach(async () => {
     Local = Mina.LocalBlockchain({ proofsEnabled });
     Mina.setActiveInstance(Local);
-    sender = Local.testAccounts[0].publicKey;
-    senderKey = Local.testAccounts[0].privateKey;
+    deployer = Local.testAccounts[0].publicKey;
+    deployerKey = Local.testAccounts[0].privateKey;
     user = Local.testAccounts[1].publicKey;
     userKey = Local.testAccounts[1].privateKey;
 
@@ -49,24 +50,24 @@ describe('ZkMixer', () => {
     zkMixerPublicKey = zkMixerPrivateKey.toPublicKey();
     zkMixer = new ZkMixer(zkMixerPublicKey);
 
-    const deployTxn = await Mina.transaction(sender, () => {
-      AccountUpdate.fundNewAccount(sender);
+    const deployTxn = await Mina.transaction(deployer, () => {
+      AccountUpdate.fundNewAccount(deployer);
       zkMixer.deploy();
     });
     await deployTxn.prove();
-    await deployTxn.sign([senderKey, zkMixerPrivateKey]).send();
+    await deployTxn.sign([deployerKey, zkMixerPrivateKey]).send();
 
     userCommitments = new MerkleMap();
     userNullifierHashes = new MerkleMap();
 
-    const initTxn = await Mina.transaction(sender, () => {
+    const initTxn = await Mina.transaction(deployer, () => {
       zkMixer.initState(
         userCommitments.getRoot(),
         userNullifierHashes.getRoot()
       );
     });
     await initTxn.prove();
-    await initTxn.sign([senderKey]).send();
+    await initTxn.sign([deployerKey]).send();
   });
 
   async function deposit(depositType: Field, user: PublicKey) {
@@ -186,6 +187,52 @@ describe('ZkMixer', () => {
         initialUserBalance + depositType.toBigInt()
       );
       expect(finalSCBalance).toEqual(initialSCBalance - depositType.toBigInt());
+    });
+
+    it('should not deposit with zero balance', async () => {
+      const depositType = Field(1);
+      const initialUserBalance = Mina.getBalance(user).toBigInt();
+      console.log('initialUserBalance', initialUserBalance);
+
+      // account empty without balance
+      let transferTx = await Mina.transaction(user, () => {
+        AccountUpdate.createSigned(user).send({
+          to: deployer,
+          amount: 999999999999n,
+        });
+      });
+      await transferTx.prove();
+      await transferTx.sign([userKey]).send();
+      await expect(deposit(depositType, user)).rejects.toThrow();
+    });
+
+    it('should not deposit with invalid deposit type', async () => {
+      const depositType = Field(4); // An invalid deposit type
+
+      await expect(deposit(depositType, user)).rejects.toThrow(Error);
+    });
+
+    it.only('should fail on depositing already deposited commitment', async () => {
+      const depositType = Field(1);
+      const { userNonce, nullifier } = await deposit(depositType, user);
+
+      // calculate the same commitment again
+      const commitment = Poseidon.hash(
+        [userNonce.toFields(), nullifier, depositType].flat()
+      );
+      const commitmentWitness = userCommitments.getWitness(commitment);
+
+      try {
+        const depositTxn2 = await Mina.transaction(user, () => {
+          zkMixer.deposit(commitment, commitmentWitness, depositType);
+        });
+        await depositTxn2.prove();
+        await depositTxn2.sign([userKey]).send();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (error: any) {
+        expect(error.message).toContain('Field.assertEquals():');
+      }
+      expect(false).toBe(true); // If we reach this line, the test should fail
     });
   });
 });
