@@ -1,27 +1,87 @@
 
 import Head from 'next/head';
 import Image from 'next/image';
-import { useEffect } from 'react';
 import GradientBG from '../components/GradientBG.js';
 import styles from '../styles/Home.module.css';
 
+import { useEffect, useState } from "react";
+
+import ZkappWorkerClient from './zkappWorkerClient';
+import { PublicKey, Field } from 'snarkyjs';
+
+const CONTRACT_ADDRESS = 'TODO';
+let transactionFee = 0.1;
+
 export default function Home() {
+  let [state, setState] = useState({
+    zkappWorkerClient: null as null | ZkappWorkerClient,
+    hasWallet: null as null | boolean,
+    hasBeenSetup: false,
+    accountExists: false,
+    publicKey: null as null | PublicKey,
+    zkappPublicKey: null as null | PublicKey,
+    creatingTransaction: false,
+    currentCommitmentsRoot: null as null | Field,
+    currentNullifierHashesRoot: null as null | Field,
+  });
+
+  // SETUP
   useEffect(() => {
     (async () => {
-      const { Mina, PublicKey } = await import('snarkyjs');
-      const { Add } = await import('../../../contracts/build/src/');
+      if (!state.hasBeenSetup) {
+        const zkappWorkerClient = new ZkappWorkerClient();
+        await zkappWorkerClient.setActiveInstanceToBerkeley();
+  
+        const mina = (window as any).mina;
+        
+        if (mina == null) {
+          setState({ ...state, hasWallet: false });
+          return;
+        }
+        
+        const publicKeyBase58: string = (await mina.requestAccounts())[0];
+        const publicKey = PublicKey.fromBase58(publicKeyBase58);
+        
+        console.log('using key', publicKey.toBase58());
+        
+        console.log('checking if account exists...');
+        const res = await zkappWorkerClient.fetchAccount({
+          publicKey: publicKey!
+        });
+        const accountExists = res.error == null;
+        
+        await zkappWorkerClient.loadContract();
+        
+        console.log('compiling zkApp');
+        await zkappWorkerClient.compileContract();
+        console.log('zkApp compiled');
+        
+        const zkappPublicKey = PublicKey.fromBase58(CONTRACT_ADDRESS);
+        
+        await zkappWorkerClient.initZkappInstance(zkappPublicKey);
+        
+        console.log('getting zkApp state...');
+        await zkappWorkerClient.fetchAccount({ publicKey: zkappPublicKey })
 
-      // Update this to use the address (public key) for your zkApp account.
-      // To try it out, you can try this address for an example "Add" smart contract that we've deployed to
-      // Berkeley Testnet B62qkwohsqTBPsvhYE8cPZSpzJMgoKn4i1LQRuBAtVXWpaT4dgH6WoA.
-      const zkAppAddress = '';
-      // This should be removed once the zkAppAddress is updated.
-      if (!zkAppAddress) {
-        console.error(
-          'The following error is caused because the zkAppAddress has an empty string as the public key. Update the zkAppAddress with the public key for your zkApp account, or try this address for an example "Add" smart contract that we deployed to Berkeley Testnet: B62qkwohsqTBPsvhYE8cPZSpzJMgoKn4i1LQRuBAtVXWpaT4dgH6WoA'
-        );
+        const currentCommitmentsRoot = await zkappWorkerClient.getCommitmentsRoot();
+        const currentNullifierHashesRoot = await zkappWorkerClient.getNullifierHashesRoot();
+        console.log('current state:', {
+          currentCommitmentsRoot,
+          currentNullifierHashesRoot,
+        });
+        
+        setState({
+            ...state,
+            zkappWorkerClient,
+            hasWallet: true,
+            hasBeenSetup: true,
+            publicKey,
+            zkappPublicKey,
+            accountExists,
+            currentCommitmentsRoot,
+            currentNullifierHashesRoot,
+        });
       }
-      //const zkApp = new Add(PublicKey.fromBase58(zkAppAddress))
     })();
   }, []);
 
