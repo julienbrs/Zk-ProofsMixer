@@ -33,9 +33,9 @@ export class ZkMixer extends SmartContract {
   /**
    * Deposit funds into the contract
    *
-   * @param commitment of the deposit
-   * @param witness of the commitment
-   * @param depositType of the deposit. Should be 1, 2 or 3
+   * @remarks Commitment should be calculated as:
+   * commitment = Poseidon.hash([nonce, nullifier, depositType, addressToWithdraw])
+   * addressToWithdraw is 0 if the user wants to withdraw to the same address
    */
   @method deposit(
     commitment: Field,
@@ -76,6 +76,15 @@ export class ZkMixer extends SmartContract {
     sendingAccount.send({ to: this.address, amount: amountToDeposit });
   }
 
+  /**
+   * Withdraw funds from the contract
+   *
+   * @remarks Withdraw is valid if:
+   * - the nullifier is valid not already spent
+   * - the commitment is in the tree
+   * - the deposit type is between 1 and 3
+   * - the `addressToWithdraw" is 0 or matches the caller address
+   */
   @method withdraw(
     nullifier: Field,
     nullifierWitness: MerkleMapWitness,
@@ -84,25 +93,24 @@ export class ZkMixer extends SmartContract {
     depositType: Field,
     specificAddressField: Field
   ) {
+    // make sure that the deposit type is between 1 and 3
     depositType.assertGreaterThanOrEqual(Field(1));
     depositType.assertLessThanOrEqual(Field(3));
 
     const isFeatureEnabled: Bool = Provable.if(
-      specificAddressField.equals(Field(0)), // true if desactivated
+      specificAddressField.equals(Field(0)), // true if the feature is disabled
       new Bool(false),
       new Bool(true)
     );
-
     const isAddressValid: Bool = Provable.if(
       isFeatureEnabled,
       specificAddressField.equals(this.sender.toFields()[0]),
-      new Bool(true) // always true if desactivated
+      new Bool(true) // always true if amountToWithdraw is 0
     );
-
     // crash if the address is not valid
     isAddressValid.assertTrue();
 
-    // check onchain state matches
+    // check onchain states match
     this.commitmentsRoot.getAndAssertEquals();
     this.nullifierHashesRoot.getAndAssertEquals();
 
@@ -112,18 +120,18 @@ export class ZkMixer extends SmartContract {
       nullifierWitness.computeRootAndKey(notSpent);
     oldRootNullifier.assertEquals(this.nullifierHashesRoot.get());
 
+    // check that the nullifier provided is the correct one
     const hashedNullifier = Poseidon.hash([nullifier]);
     key.assertEquals(hashedNullifier);
 
     const commitmentCalculated = Poseidon.hash(
       [nonce.toFields(), nullifier, depositType, specificAddressField].flat()
     );
-    // check that the commitment is in the tree
+    // check that the commitment provided is in the tree
     const [expectedRootCommitment, keyCommitment] =
       commitmentWitness.computeRootAndKey(depositType);
 
     expectedRootCommitment.assertEquals(this.commitmentsRoot.get());
-
     keyCommitment.assertEquals(commitmentCalculated);
 
     // Consuming the commitment
