@@ -124,7 +124,8 @@ async function withdraw(
       nullifierHashWitness,
       commitmentWitness,
       nonce,
-      depositType
+      depositType,
+      Field(0)
     );
   });
   await withdrawTx.prove();
