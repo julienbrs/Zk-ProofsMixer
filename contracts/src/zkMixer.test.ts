@@ -208,6 +208,41 @@ describe('ZkMixer', () => {
       expect(finalSCBalance).toEqual(initialSCBalance + DEPOSIT_AMOUNT[0]);
     });
 
+    it.only('should successfully deposit Type1, then deposit Type2', async () => {
+      // get initial balances before deposit
+      const initialUserBalance = Mina.getBalance(user).toBigInt();
+      const initialSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+      const depositType1 = Field(1);
+
+      await depositWrapper(depositType1, user);
+
+      // get final balances
+      const finalUserBalance = Mina.getBalance(user).toBigInt();
+      const finalSCBalance = Mina.getBalance(zkMixer.address).toBigInt();
+
+      // compare the root of the smart contract tree to our local tree
+      expect(commitmentMap.getRoot()).toStrictEqual(
+        zkMixer.commitmentsRoot.get()
+      );
+      expect(finalUserBalance).toEqual(initialUserBalance - DEPOSIT_AMOUNT[0]);
+      expect(finalSCBalance).toEqual(initialSCBalance + DEPOSIT_AMOUNT[0]);
+
+      // deposit Type2
+      const depositType2 = Field(2);
+      await depositWrapper(depositType2, user);
+
+      // get final balances
+      const finalUserBalance2 = Mina.getBalance(user).toBigInt();
+      const finalSCBalance2 = Mina.getBalance(zkMixer.address).toBigInt();
+
+      // compare the root of the smart contract tree to our local tree
+      expect(commitmentMap.getRoot()).toStrictEqual(
+        zkMixer.commitmentsRoot.get()
+      );
+      expect(finalUserBalance2).toEqual(finalUserBalance - DEPOSIT_AMOUNT[1]);
+      expect(finalSCBalance2).toEqual(finalSCBalance + DEPOSIT_AMOUNT[1]);
+    });
+
     it('should not deposit when caller does not have enough balance', async () => {
       const depositType1 = Field(1);
 
