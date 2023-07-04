@@ -23,6 +23,7 @@ const state = {
 
 const functions = {
   setActiveInstanceToBerkeley: async (args: {}) => {
+    console.log("setActiveInstanceToBerkeley")
     const Berkeley = Mina.Network(
       "https://proxy.berkeley.minaexplorer.com/graphql"
     );
@@ -106,7 +107,7 @@ export type WorkerFunctions = keyof typeof functions;
 
 export type ZkappWorkerRequest = {
   id: number;
-  fn: WorkerFunctions;
+  fn: WorkerFunctions | "isReady";
   args: any;
 };
 
@@ -114,17 +115,18 @@ export type ZkappWorkerReponse = {
   id: number;
   data: any;
 };
-if (typeof window !== "undefined") {
-  addEventListener(
-    "message",
-    async (event: MessageEvent<ZkappWorkerRequest>) => {
-      const returnData = await functions[event.data.fn](event.data.args);
 
-      const message: ZkappWorkerReponse = {
-        id: event.data.id,
-        data: returnData,
-      };
-      postMessage(message);
-    }
-  );
+self.onmessage = async (event: MessageEvent<ZkappWorkerRequest>) => {
+  if (event.data.fn === "isReady") {
+    postMessage({ id: -1 })
+    return;
+  }
+
+  const returnData = await functions[event.data.fn](event.data.args);
+
+  const message: ZkappWorkerReponse = {
+    id: event.data.id,
+    data: returnData,
+  };
+  postMessage(message);
 }
