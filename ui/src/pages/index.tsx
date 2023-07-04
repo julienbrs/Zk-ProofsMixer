@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import ZkappWorkerClient from './zkappWorkerClient';
 import { PublicKey, Field } from 'snarkyjs';
 
-const CONTRACT_ADDRESS = 'TODO';
+const CONTRACT_ADDRESS = 'B62qjKo8hYqsdjw68hSBB9XaURdNa2JQGi63yLDfVDAx21cnSdEfBeP';
 let transactionFee = 0.1;
 
 export default function Home() {
