@@ -148,9 +148,6 @@ export class ZkMixer extends SmartContract {
     ]);
     const amountToWithdraw: UInt64 = new UInt64(amountToWithdrawField);
 
-    console.log('depositType', depositType);
-    console.log('amountToWithdraw', amountToWithdrawField);
-
     // Withdraw funds
     this.send({ to: this.sender, amount: amountToWithdraw });
   }

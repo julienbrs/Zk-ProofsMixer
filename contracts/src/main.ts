@@ -169,7 +169,7 @@ async function withdrawWrapper(
   // 3) Set nullifier hash to spent on local tree
   userHashedNullifiers.set(nullifierHash, Field(1));
   // 4) Set commitment on local tree
-  userCommitments.set(commitment, Field(1));
+  userCommitments.set(commitment, Field(depositType));
 }
 
 // --------------------------------------
@@ -196,7 +196,7 @@ console.log(
   'Alice deposit of Type 1 (100000 tokens) and Type 2 (500000 tokens)...'
 );
 let aliceNote_1 = await depositWrapper(Field(1), alice);
-let aliceNote_2 = await depositWrapper(Field(2), alice); // todo: to change to field(2) again, only for debug atm
+let aliceNote_2 = await depositWrapper(Field(3), alice); // todo: to change to field(2) again, only for debug atm
 console.log(
   'Alice balance:',
   alice.balance().toString(),
