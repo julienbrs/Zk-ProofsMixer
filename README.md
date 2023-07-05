@@ -56,7 +56,7 @@ ZkMixer is a non-custodial Mina protocol and token privacy solution based on zkS
 
 The concept of ZkMixer draws inspiration from the Tornado Cash project on Ethereum, but implements it within the Mina ecosystem, creating an opportunity for truly private transactions on the Mina blockchain.
 
-The ZkMixer project has been extensively tested (you can run start running tests now because it takes 5 minutes to run it all, please see the [Getting Started](#getting-started) section for more details), has been deployed on the Mina testnet and the frontend is deployed with Vercel.
+The ZkMixer project has been extensively tested (you can run start running tests now because it takes 5 minutes to run it all, please see the [Getting Started](#how-to-test) section for more details), has been deployed on the Mina testnet. But we didn't have time to deploy the dApp on the mainnet.
 
 <br />
 
@@ -69,7 +69,8 @@ The ZkMixer project has been extensively tested (you can run start running tests
 
 To make a deposit, a user generates a secret (referred to as a 'commitment') and sends it, along with the deposit type, to the ZkMixer smart contract. The contract acknowledges the deposit and adds the commitment to its deposit tree, which is a Merkle Map (similar as a Merkle Tree but with key-value pairs instead of indices).
 
-The deposit type indicates the quantity of tokens to deposit (1 for 100,000, 2 for 500,000, 3 for 1,000,000). Once the deposit is made, the state of the Merkle tree is updated to include the new commitment.
+The deposit type indicates the quantity of tokens to deposit (1 for 100,000, 2 for 500,000, 3 for 1,000,000, be aware that it is 
+). Once the deposit is made, the state of the Merkle tree is updated to include the new commitment.
 
 Later, when the user decides to make a withdrawal, they need to provide a proof that they possess a secret to an unspent commitment from the smart contract’s deposit tree. zkSnark technology allows this to happen without revealing which exact deposit corresponds to this secret. The smart contract will check the proof and transfer the deposited tokens to the address specified for withdrawal. To an external observer, it will be impossible to determine which deposit this withdrawal originated from.
 
@@ -194,9 +195,7 @@ We would like to express our deepest appreciation to Mina Protocol and Developer
 
 We'd like to extend our thanks to Mina for providing an environment that encourages development and exploration. Their comprehensive documentation and resources available on the [Mina Protocol website](https://minaprotocol.com/) and [Mina Protocol Documentation](https://docs.minaprotocol.com/) have been invaluable in the development process and have greatly facilitated our understanding of the protocol.
 
-We would also like to highlight the insightful research paper ["PLUME: An ECDSA Nullifier Scheme for Unique Pseudonymity within Zero Knowledge Proofs"](https://eprint.iacr.org/2022/1255.pdf) by Aayush Gupta and Kobi Gurkan. This work was vital in deepening our understanding of ZK-SNARKs and their practical applications in enhancing privacy on the blockchain.
-
-For those interested in diving deeper into the concepts of privacy and mixers, we highly recommend reading the documentation of [Aztec](https://docs.aztec.network/aztec/protocol/trees) and [Tornado Cash](https://github.com/tornadocash). These resources provide a wealth of information on privacy-focused solutions in the crypto space.
+For those interested in diving deeper into the concepts of privacy and mixers, we highly recommend reading the documentation of [Aztec](https://docs.aztec.network/aztec/protocol/trees) and [Tornado Cash whitepaper](https://berkeley-defi.github.io/assets/material/Tornado%20Cash%20Whitepaper.pdf). These resources provide a wealth of information on privacy-focused solutions in the crypto space.
 
 ## Contact
 
