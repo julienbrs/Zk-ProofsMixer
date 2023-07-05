@@ -11,23 +11,38 @@ import {
   UInt32,
   UInt64,
   Bool,
-  Permissions,
+  MerkleMap,
 } from 'snarkyjs';
+
+import { DepositEvent } from './types';
+
+// Constants
+export const POOLS = {
+  1: 100000,
+  2: 500000,
+  3: 1000000,
+};
+const NOT_DEPOSITED = Field(0);
+
+// Error messages
+const DEPOSIT_TYPE_ERROR_MSG = 'depositType must be 1, 2 or 3';
+const DEPOSIT_WITNESS_ERROR_MSG = 'already deposited commitment';
+const WITHDRAW_SPENT_ERROR_MSG = 'already withdrawn commitment';
+const WITHDRAW_INVALID_NULLIFIER_ERROR_MSG = 'invalid nullifier';
+const WITHDRAW_INVALID_COMMITMENT_ERROR_MSG = 'commitment not found';
 
 export class ZkMixer extends SmartContract {
   @state(Field) commitmentsRoot = State<Field>();
   @state(Field) nullifierHashesRoot = State<Field>();
 
-  init() {
-    super.init();
-    this.account.permissions.set({
-      ...Permissions.default(),
-    });
-  }
+  events = {
+    deposit: DepositEvent,
+  };
 
-  @method initState(initialCommitmentRoot: Field, initialNullifierRoot: Field) {
-    this.commitmentsRoot.set(initialCommitmentRoot);
-    this.nullifierHashesRoot.set(initialNullifierRoot);
+  @method initState() {
+    const emptyTreeRoot = new MerkleMap().getRoot();
+    this.commitmentsRoot.set(emptyTreeRoot);
+    this.nullifierHashesRoot.set(emptyTreeRoot);
   }
 
   /**
@@ -43,18 +58,15 @@ export class ZkMixer extends SmartContract {
     depositType: Field
   ) {
     // make sure that the deposit type is between 1 and 3
-    depositType.assertGreaterThanOrEqual(Field(1));
-    depositType.assertLessThanOrEqual(Field(3));
+    depositType.assertGreaterThanOrEqual(Field(1), DEPOSIT_TYPE_ERROR_MSG);
+    depositType.assertLessThanOrEqual(Field(3), DEPOSIT_TYPE_ERROR_MSG);
 
-    const initialRoot = this.commitmentsRoot.get();
-    this.commitmentsRoot.assertEquals(initialRoot);
+    const initialRoot = this.commitmentsRoot.getAndAssertEquals();
 
-    // check the initial state matches what we expect
-    const notDeposited = Field(0); // 0 means not deposited
-    const [rootBefore, key] = witness.computeRootAndKey(notDeposited);
-    rootBefore.assertEquals(initialRoot); // check the root matches
-
-    key.assertEquals(commitment); // check the commitment is in the tree
+    // Check that there are no other deposits with the same commitment
+    const [rootBefore, key] = witness.computeRootAndKey(NOT_DEPOSITED);
+    rootBefore.assertEquals(initialRoot, DEPOSIT_WITNESS_ERROR_MSG);
+    key.assertEquals(commitment, DEPOSIT_WITNESS_ERROR_MSG);
 
     // compute the root after the deposit
     const [rootAfter] = witness.computeRootAndKey(depositType);
@@ -65,15 +77,21 @@ export class ZkMixer extends SmartContract {
     // calculate the amount to deposit
     const whatTypeBool: Bool[] = [1, 2, 3].map((i) => depositType.equals(i));
     const amountToDepositField: Field = Provable.switch(whatTypeBool, Field, [
-      Field(100000),
-      Field(500000),
-      Field(1000000),
+      Field(POOLS[1]),
+      Field(POOLS[2]),
+      Field(POOLS[3]),
     ]);
     const amountToDeposit: UInt64 = new UInt64(amountToDepositField);
 
     // send the funds to the contract
     const sendingAccount = AccountUpdate.createSigned(this.sender);
     sendingAccount.send({ to: this.address, amount: amountToDeposit });
+
+    // emit event
+    this.emitEvent('deposit', {
+      commitment,
+      depositType,
+    });
   }
 
   /**
@@ -94,8 +112,8 @@ export class ZkMixer extends SmartContract {
     specificAddressField: Field
   ) {
     // make sure that the deposit type is between 1 and 3
-    depositType.assertGreaterThanOrEqual(Field(1));
-    depositType.assertLessThanOrEqual(Field(3));
+    depositType.assertGreaterThanOrEqual(Field(1), DEPOSIT_TYPE_ERROR_MSG);
+    depositType.assertLessThanOrEqual(Field(3), DEPOSIT_TYPE_ERROR_MSG);
 
     const isFeatureEnabled: Bool = Provable.if(
       specificAddressField.equals(Field(0)), // true if the feature is disabled
@@ -118,11 +136,14 @@ export class ZkMixer extends SmartContract {
     const notSpent = Field(0);
     const [oldRootNullifier, key] =
       nullifierWitness.computeRootAndKey(notSpent);
-    oldRootNullifier.assertEquals(this.nullifierHashesRoot.get());
+    oldRootNullifier.assertEquals(
+      this.nullifierHashesRoot.get(),
+      WITHDRAW_SPENT_ERROR_MSG
+    );
 
     // check that the nullifier provided is the correct one
     const hashedNullifier = Poseidon.hash([nullifier]);
-    key.assertEquals(hashedNullifier);
+    key.assertEquals(hashedNullifier, WITHDRAW_INVALID_NULLIFIER_ERROR_MSG);
 
     const commitmentCalculated = Poseidon.hash(
       [nonce.toFields(), nullifier, depositType, specificAddressField].flat()
@@ -131,8 +152,14 @@ export class ZkMixer extends SmartContract {
     const [expectedRootCommitment, keyCommitment] =
       commitmentWitness.computeRootAndKey(depositType);
 
-    expectedRootCommitment.assertEquals(this.commitmentsRoot.get());
-    keyCommitment.assertEquals(commitmentCalculated);
+    expectedRootCommitment.assertEquals(
+      this.commitmentsRoot.get(),
+      WITHDRAW_INVALID_COMMITMENT_ERROR_MSG
+    );
+    keyCommitment.assertEquals(
+      commitmentCalculated,
+      WITHDRAW_INVALID_COMMITMENT_ERROR_MSG
+    );
 
     // Consuming the commitment
     const spent = Field(1);
@@ -142,9 +169,9 @@ export class ZkMixer extends SmartContract {
     // Calculate the amount to withdraw
     const whatTypeBool: Bool[] = [1, 2, 3].map((i) => depositType.equals(i));
     const amountToWithdrawField: Field = Provable.switch(whatTypeBool, Field, [
-      Field(100000),
-      Field(500000),
-      Field(1000000),
+      Field(POOLS[1]),
+      Field(POOLS[2]),
+      Field(POOLS[3]),
     ]);
     const amountToWithdraw: UInt64 = new UInt64(amountToWithdrawField);
 
