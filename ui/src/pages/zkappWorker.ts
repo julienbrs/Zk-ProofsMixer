@@ -45,6 +45,15 @@ const functions = {
     return await fetchAccount({ publicKey });
   },
 
+  fetchNonce: async (args: { publicKey58: string }) => {
+    const publicKey = PublicKey.fromBase58(args.publicKey58);
+    const account = await fetchAccount({ publicKey });
+    if (account.error) {
+      return 0;
+    }
+    return account.account.nonce.toString();
+  },
+
   initZkappInstance: async (args: { publicKey58: string }) => {
     const publicKey = PublicKey.fromBase58(args.publicKey58);
     state.zkapp = new state.ZkMixer!(publicKey);

@@ -34,6 +34,18 @@ export default class ZkappWorkerClient {
     return result as ReturnType<typeof fetchAccount>;
   }
 
+  async fetchNonce({
+    publicKey,
+  }: {
+    publicKey: PublicKey;
+  }) {
+    const result = await this._call("fetchNonce", {
+      publicKey58: publicKey.toBase58(),
+    });
+    console.log("fetchNonce", result)
+    return new UInt32(parseInt(result as string));
+  }
+
   initZkappInstance(publicKey: PublicKey) {
     return this._call("initZkappInstance", {
       publicKey58: publicKey.toBase58(),
