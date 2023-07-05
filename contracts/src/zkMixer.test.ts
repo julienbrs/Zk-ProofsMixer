@@ -9,7 +9,7 @@ import {
 } from 'snarkyjs';
 
 import { deployAndInit, depositWrapper, withdrawWrapper } from './utils';
-import { KeyPair, LocalState } from './types';
+import { DepositNote, KeyPair, LocalState } from './types';
 
 let proofsEnabled = false;
 
@@ -162,7 +162,7 @@ describe('ZkMixer', () => {
 
     it('should fail when doing twice the same commitment', async () => {
       const depositType1 = Field(1);
-      const { depositNonce, nullifier } = await depositWrapper(
+      const { nonce: depositNonce, nullifier } = await depositWrapper(
         app,
         state,
         depositType1,
@@ -270,12 +270,7 @@ describe('ZkMixer', () => {
     it('should withdraw successfully a deposit of Type1 withdrawable to any address', async () => {
       // User do a deposit of Type1
       const depositType1 = Field(1);
-      const { depositNonce, nullifier } = await depositWrapper(
-        app,
-        state,
-        depositType1,
-        users[0]
-      );
+      const note1 = await depositWrapper(app, state, depositType1, users[0]);
 
       // get balances before withdrawal
       const userBalanceBeforeWithdraw = Mina.getBalance(
@@ -284,15 +279,7 @@ describe('ZkMixer', () => {
       const SCBalanceBeforeWithdraw = Mina.getBalance(app.address).toBigInt();
 
       // user withdraws the deposit
-      await withdrawWrapper(
-        app,
-        state,
-        depositNonce,
-        nullifier,
-        users[0],
-        depositType1,
-        null
-      );
+      await withdrawWrapper(app, state, users[0], note1);
 
       // get final balances
       const finalUserBalance = Mina.getBalance(users[0].publicKey).toBigInt();
@@ -312,20 +299,15 @@ describe('ZkMixer', () => {
     });
 
     it('should not allow withdrawal without an existing deposit', async () => {
-      const depositType = Field(1);
-      const nullifier = Field.random();
-      const userNonce = Mina.getAccount(users[0].publicKey).nonce;
+      const emptyNote: DepositNote = {
+        nonce: Mina.getAccount(users[0].publicKey).nonce,
+        commitment: Field.random(),
+        nullifier: Field.random(),
+        depositType: Field(1),
+      };
 
       await expect(
-        withdrawWrapper(
-          app,
-          state,
-          userNonce,
-          nullifier,
-          users[0],
-          depositType,
-          null
-        )
+        withdrawWrapper(app, state, users[0], emptyNote)
       ).rejects.toThrow();
     });
 
@@ -333,59 +315,24 @@ describe('ZkMixer', () => {
       const depositType1 = Field(1);
 
       // deposit
-      const { depositNonce, nullifier } = await depositWrapper(
-        app,
-        state,
-        depositType1,
-        users[0]
-      );
+      const note = await depositWrapper(app, state, depositType1, users[0]);
 
       // First withdrawal should succeed
-      await withdrawWrapper(
-        app,
-        state,
-        depositNonce,
-        nullifier,
-        users[0],
-        depositType1,
-        null
-      );
+      await withdrawWrapper(app, state, users[0], note);
 
       // Second withdrawal attempt with the same nullifier should fail
       await expect(
-        withdrawWrapper(
-          app,
-          state,
-          depositNonce,
-          nullifier,
-          users[0],
-          depositType1,
-          null
-        )
+        withdrawWrapper(app, state, users[0], note)
       ).rejects.toThrow();
     });
 
     it('should not allow a withdrawal of type different than the deposit type', async () => {
       const depositType1 = Field(1);
-      const differentWithdrawType = Field(2);
-      const { depositNonce, nullifier } = await depositWrapper(
-        app,
-        state,
-        depositType1,
-        users[0]
-      );
+      const note = await depositWrapper(app, state, depositType1, users[0]);
 
       // Attempt to withdraw a Type2 deposit while it's a Type1 deposit
       await expect(
-        withdrawWrapper(
-          app,
-          state,
-          depositNonce,
-          nullifier,
-          users[0],
-          differentWithdrawType,
-          null
-        )
+        withdrawWrapper(app, state, users[0], note)
       ).rejects.toThrow();
     });
 
@@ -397,6 +344,13 @@ describe('ZkMixer', () => {
       const userNonce = Mina.getAccount(users[0].publicKey).nonce;
       const nullifier = Field.random();
 
+      const invalidDepositNote: DepositNote = {
+        nonce: userNonce,
+        commitment: Field.random(),
+        nullifier,
+        depositType: invalidType,
+      };
+
       // Attempt to deposit an invalid type
       await expect(
         depositWrapper(app, state, invalidType, users[0])
@@ -404,39 +358,17 @@ describe('ZkMixer', () => {
 
       // Attempt to withdraw an invalid type
       await expect(
-        withdrawWrapper(
-          app,
-          state,
-          userNonce,
-          nullifier,
-          users[0],
-          invalidType,
-          null
-        )
+        withdrawWrapper(app, state, users[0], invalidDepositNote)
       ).rejects.toThrow();
     });
 
     it('should not allow withdrawal with invalid nullifier', async () => {
       const depositType1 = Field(1);
-      const { depositNonce } = await depositWrapper(
-        app,
-        state,
-        depositType1,
-        users[0]
-      );
-      const randomNullifier = Field.random();
+      const note = await depositWrapper(app, state, depositType1, users[0]);
 
       // Attempt to withdraw with an invalid nullifier
       await expect(
-        withdrawWrapper(
-          app,
-          state,
-          depositNonce,
-          randomNullifier,
-          users[0],
-          depositType1,
-          null
-        )
+        withdrawWrapper(app, state, users[0], note)
       ).rejects.toThrow();
     });
 
@@ -452,7 +384,7 @@ describe('ZkMixer', () => {
         const initialSCBalance = Mina.getBalance(app.address).toBigInt();
 
         // deposit, only user is allowed to withdraw
-        const { depositNonce, nullifier } = await depositWrapper(
+        const note = await depositWrapper(
           app,
           state,
           depositType1,
@@ -461,15 +393,7 @@ describe('ZkMixer', () => {
         );
 
         // user withdraws the deposit
-        await withdrawWrapper(
-          app,
-          state,
-          depositNonce,
-          nullifier,
-          users[0],
-          depositType1,
-          users[0].publicKey
-        );
+        await withdrawWrapper(app, state, users[0], note);
 
         // get final balances
         const finalUserBalance = Mina.getBalance(users[0].publicKey).toBigInt();
@@ -498,7 +422,7 @@ describe('ZkMixer', () => {
         const initialSCBalance = Mina.getBalance(app.address).toBigInt();
 
         // deposit, only deployer is allowed to withdraw
-        const { depositNonce, nullifier } = await depositWrapper(
+        const note = await depositWrapper(
           app,
           state,
           depositType1,
@@ -507,15 +431,7 @@ describe('ZkMixer', () => {
         );
 
         // deployer withdraws to him
-        await withdrawWrapper(
-          app,
-          state,
-          depositNonce,
-          nullifier,
-          deployer,
-          depositType1,
-          deployer.publicKey
-        );
+        await withdrawWrapper(app, state, deployer, note);
 
         // get final balances
         const finalUserBalance = Mina.getBalance(users[0].publicKey).toBigInt();
@@ -542,7 +458,7 @@ describe('ZkMixer', () => {
         const depositType1 = Field(1);
         const addressToWithdraw = deployer.publicKey.toFields()[0];
         // specific address expected is deployer
-        const { depositNonce, nullifier } = await depositWrapper(
+        const note = await depositWrapper(
           app,
           state,
           depositType1,
@@ -552,15 +468,7 @@ describe('ZkMixer', () => {
 
         // deployer withdraws to him
         await expect(
-          withdrawWrapper(
-            app,
-            state,
-            depositNonce,
-            nullifier,
-            users[0],
-            depositType1,
-            deployer.publicKey
-          )
+          withdrawWrapper(app, state, users[0], note)
         ).rejects.toThrow();
       });
     });

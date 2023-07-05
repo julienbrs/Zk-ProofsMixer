@@ -1,15 +1,13 @@
 import {
   Mina,
   PrivateKey,
-  PublicKey,
   AccountUpdate,
   Field,
   Poseidon,
-  UInt32,
   MerkleMap,
 } from 'snarkyjs';
 import { ZkMixer } from '../zkMixer';
-import { DepositEvent, KeyPair, LocalState } from '../types';
+import { DepositEvent, DepositNote, KeyPair, LocalState } from '../types';
 
 /**
  * Deploys and initializes the zkMixer contract
@@ -51,7 +49,7 @@ async function depositWrapper(
   depositType: Field,
   caller: KeyPair,
   addressToWithdraw: Field = Field(0)
-) {
+): Promise<DepositNote> {
   // get caller's information
   const callerAccount = Mina.getAccount(caller.publicKey);
   const depositNonce = callerAccount.nonce;
@@ -59,25 +57,31 @@ async function depositWrapper(
 
   // calculate the new commitment. If `addressToWithdraw` is Field(0), then it won't change the hash
   // and the deposit will be withdrawable to any address that got the note
-  const newCommitment = Poseidon.hash(
+  const commitment = Poseidon.hash(
     [depositNonce.toFields(), nullifier, depositType, addressToWithdraw].flat()
   );
 
   // get the witness for the current tree
-  const commitmentWitness = state.localCommitmentsMap.getWitness(newCommitment);
+  const commitmentWitness = state.localCommitmentsMap.getWitness(commitment);
 
   // on-chain deposit
   const depositTx = await Mina.transaction(caller.publicKey, () => {
-    app.deposit(newCommitment, commitmentWitness, depositType);
+    app.deposit(commitment, commitmentWitness, depositType);
   });
   await depositTx.prove();
   await depositTx.sign([caller.privateKey]).send();
 
   // update the leaf locally if the deposit was successful
-  state.localCommitmentsMap.set(newCommitment, depositType);
+  state.localCommitmentsMap.set(commitment, depositType);
 
-  // return necessary information for withdrawal
-  return { depositNonce, nullifier };
+  // return deposit note for withdrawal
+  return {
+    nonce: depositNonce,
+    commitment,
+    nullifier,
+    depositType,
+    addressToWithdraw: addressToWithdraw,
+  };
 }
 
 /* withdrawWrapper is a helper function that withdraws from the zkMixer contract
@@ -93,27 +97,24 @@ async function depositWrapper(
 async function withdrawWrapper(
   app: ZkMixer,
   state: LocalState,
-  oldNonce: UInt32,
-  nullifier: Field,
   caller: KeyPair,
-  depositType: Field,
-  addressToWithdraw: PublicKey | null
+  note: DepositNote
 ) {
   // if `addressToWithdraw` is null, then `addressToWithdrawField` will be Field(0) so it won't change the hash
-  let addressToWithdrawField: Field;
-  if (addressToWithdraw === null) {
-    addressToWithdrawField = Field(0);
-  } else {
-    addressToWithdrawField = addressToWithdraw.toFields()[0];
-  }
+  let addressToWithdrawField = note?.addressToWithdraw ?? Field(0);
 
   // calculate the expected commitment used when depositing
   const expectedCommitment = Poseidon.hash(
-    [oldNonce.toFields(), nullifier, Field(1), addressToWithdrawField].flat()
+    [
+      note.nonce.toFields(),
+      note.nullifier,
+      Field(1),
+      addressToWithdrawField,
+    ].flat()
   );
 
   // hash the nullifier
-  const nullifierHashed = Poseidon.hash([nullifier]);
+  const nullifierHashed = Poseidon.hash([note.nullifier]);
 
   // get witnesses for the current tree...
   const commitmentWitness =
@@ -128,11 +129,11 @@ async function withdrawWrapper(
   // on-chain withdrawal
   const withdrawTx = await Mina.transaction(caller.publicKey, () => {
     app.withdraw(
-      nullifier,
+      note.nullifier,
       nullifierWitness,
       commitmentWitness,
-      oldNonce,
-      depositType,
+      note.nonce,
+      note.depositType,
       addressToWithdrawField
     );
   });

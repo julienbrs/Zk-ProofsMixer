@@ -16,7 +16,7 @@ export interface DepositNote {
   commitment: Field;
   nullifier: Field;
   depositType: Field;
-  addressToWithdrawField: Field;
+  addressToWithdraw?: Field;
 }
 
 // Represents a key pair to sign transactions.
