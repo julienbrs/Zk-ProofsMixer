@@ -12,6 +12,12 @@ import {
 
 import { ZkMixer } from './zkMixer.js';
 
+const DEPOSIT_AMOUNT: Array<bigint> = [
+  BigInt(100000),
+  BigInt(500000),
+  BigInt(1000000),
+];
+
 // --------------------------------------
 // State and types setup
 // --------------------------------------
@@ -21,8 +27,8 @@ let zkMixer: ZkMixer,
   zkMixerPublicKey: PublicKey,
   userCommitments: MerkleMap,
   userHashedNullifiers: MerkleMap,
-  sender: PublicKey,
-  senderKey: PrivateKey;
+  deployer: PublicKey,
+  deployerKey: PrivateKey;
 
 userCommitments = new MerkleMap();
 userHashedNullifiers = new MerkleMap();
@@ -32,11 +38,8 @@ interface DepositNote {
   commitment: Field;
   nullifier: Field;
   depositType: Field;
+  addressToWithdrawField: Field;
 }
-
-// --------------------------------------
-// Mina blockchain setup
-// --------------------------------------
 
 class User {
   publicKey: PublicKey;
@@ -47,32 +50,36 @@ class User {
     this.privateKey = Local.testAccounts[index].privateKey;
   }
 
-  balance(): UInt64 {
-    return Mina.getAccount(this.publicKey).balance;
+  balance(): bigint {
+    return Mina.getAccount(this.publicKey).balance.toBigInt();
   }
 }
 
+// --------------------------------------
+// Mina blockchain setup
+// --------------------------------------
+
 const Local = Mina.LocalBlockchain({ proofsEnabled: false });
 Mina.setActiveInstance(Local);
-sender = Local.testAccounts[0].publicKey;
-senderKey = Local.testAccounts[0].privateKey;
+deployer = Local.testAccounts[0].publicKey;
+deployerKey = Local.testAccounts[0].privateKey;
 
 zkMixerPrivateKey = PrivateKey.random();
 zkMixerPublicKey = zkMixerPrivateKey.toPublicKey();
 zkMixer = new ZkMixer(zkMixerPublicKey);
 
-const deployTxn = await Mina.transaction(sender, () => {
-  AccountUpdate.fundNewAccount(sender);
+const deployTxn = await Mina.transaction(deployer, () => {
+  AccountUpdate.fundNewAccount(deployer);
   zkMixer.deploy();
 });
 await deployTxn.prove();
-await deployTxn.sign([senderKey, zkMixerPrivateKey]).send();
+await deployTxn.sign([deployerKey, zkMixerPrivateKey]).send();
 
-const initTxn = await Mina.transaction(sender, () => {
+const initTxn = await Mina.transaction(deployer, () => {
   zkMixer.initState(userCommitments.getRoot(), userHashedNullifiers.getRoot());
 });
 await initTxn.prove();
-await initTxn.sign([senderKey]).send();
+await initTxn.sign([deployerKey]).send();
 
 console.log('zkMixer deployed and initialized');
 
@@ -80,78 +87,173 @@ console.log('zkMixer deployed and initialized');
 // Helpers for deposit and withdraw
 // --------------------------------------
 
-async function deposit(user: User, depositType: Field): Promise<DepositNote> {
+async function depositWrapper(
+  depositType: Field,
+  caller: User,
+  addressToWithdraw: User | null = null
+): Promise<DepositNote> {
+  // 0) Check deposit type is valid
   depositType.assertGreaterThanOrEqual(Field(1));
   depositType.assertLessThanOrEqual(Field(3));
 
   // 1) Generate random nullifier
   const nullifier = Field.random();
 
-  // 2) Generate commitment from nullifier, account nonce and deposit type
-  const userAccount = Mina.getAccount(user.publicKey);
+  // 2) Determine if the user wants to withdraw to a particular address
+  let addressToWithdrawField: Field;
+  if (addressToWithdraw === null) {
+    addressToWithdrawField = Field(0);
+  } else {
+    addressToWithdrawField = addressToWithdraw.publicKey.toFields()[0];
+  }
+
+  // 3) Generate commitment from nullifier, account nonce and deposit type
+  const userAccount = Mina.getAccount(caller.publicKey);
   const nonce = userAccount.nonce;
   const commitment = Poseidon.hash(
-    [nonce.toFields(), nullifier, depositType].flat()
+    [nonce.toFields(), nullifier, depositType, addressToWithdrawField].flat()
   );
   const witness = userCommitments.getWitness(commitment);
 
-  // 3) Generate proof and send transaction to Mina
-  const depositTx = await Mina.transaction(user.publicKey, () => {
+  // 4) Generate proof and send transaction to Mina
+  const depositTx = await Mina.transaction(caller.publicKey, () => {
     zkMixer.deposit(commitment, witness, depositType);
   });
   await depositTx.prove();
-  await depositTx.sign([user.privateKey]).send();
+  await depositTx.sign([caller.privateKey]).send();
 
-  // 4) Set commitment and return deposit note
-  userCommitments.set(commitment, Field(1));
-  return { nonce, commitment, nullifier, depositType } as DepositNote;
+  // 5) Set commitment and return deposit note
+  userCommitments.set(commitment, depositType);
+  return {
+    nonce,
+    commitment,
+    nullifier,
+    depositType,
+    addressToWithdrawField,
+  } as DepositNote;
 }
 
-async function withdraw(
-  user: User,
-  { nonce, commitment, nullifier, depositType }: DepositNote
+async function withdrawWrapper(
+  caller: User,
+  {
+    nonce,
+    commitment,
+    nullifier,
+    depositType,
+    addressToWithdrawField,
+  }: DepositNote
 ) {
+  // 0) Check deposit type is valid
   depositType.assertGreaterThanOrEqual(Field(1));
   depositType.assertLessThanOrEqual(Field(3));
 
+  // 1) Get witnesses and nullifier hash
   const commitmentWitness = userCommitments.getWitness(commitment);
   const nullifierHash = Poseidon.hash([nullifier]);
   const nullifierHashWitness = userHashedNullifiers.getWitness(nullifierHash);
 
-  const withdrawTx = await Mina.transaction(user.publicKey, () => {
+  // 2) Generate proof and send transaction to Mina
+  const withdrawTx = await Mina.transaction(caller.publicKey, () => {
     zkMixer.withdraw(
       nullifier,
       nullifierHashWitness,
       commitmentWitness,
       nonce,
       depositType,
-      Field(0)
+      addressToWithdrawField
     );
   });
   await withdrawTx.prove();
-  await withdrawTx.sign([user.privateKey]).send();
+  await withdrawTx.sign([caller.privateKey]).send();
 
+  // 3) Set nullifier hash to spent on local tree
   userHashedNullifiers.set(nullifierHash, Field(1));
+  // 4) Set commitment on local tree
+  userCommitments.set(commitment, Field(1));
 }
 
 // --------------------------------------
-// Real scenario with 2 users
+// Real use case scenario
 // --------------------------------------
 
 let alice = new User(1);
 let bob = new User(2);
+let oscar = new User(3);
+let eve = new User(4);
 
-console.log('Starting scenario with Alice and Bob');
+/* Common usage: Alice deposits, Bob withdraws */
+
+console.log('#**********************#');
+console.log('Basic scenario: Alice deposits twice, Bob and Oscar withdraw');
+console.log('');
+
 console.log('Alice balance:', alice.balance().toString());
 console.log('Bob balance:', bob.balance().toString());
+console.log('Oscar balance:', oscar.balance().toString());
 console.log('');
 
-console.log('Alice deposit (type 1)...');
-let aliceNote = await deposit(alice, Field(1));
-console.log('Alice balance:', alice.balance().toString());
+console.log(
+  'Alice deposit of Type 1 (100000 tokens) and Type 2 (500000 tokens)...'
+);
+let aliceNote_1 = await depositWrapper(Field(1), alice);
+let aliceNote_2 = await depositWrapper(Field(2), alice); // todo: to change to field(2) again, only for debug atm
+console.log(
+  'Alice balance:',
+  alice.balance().toString(),
+  `${alice.balance().toString() === '999999400000' ? '✅' : '❌'}`
+);
 console.log('');
 
-console.log('Bob claim Alice deposit...');
-await withdraw(bob, aliceNote);
+console.log(
+  'Bob claims Type 1 (100000 tokens) and Oscar Type 2 (500000 tokens)...'
+);
+await withdrawWrapper(bob, aliceNote_1);
+await withdrawWrapper(oscar, aliceNote_2);
+console.log(
+  'Bob balance:',
+  bob.balance().toString(),
+  `${bob.balance().toString() === '1000000100000' ? '✅' : '❌'}`
+);
+console.log(
+  'Oscar balance:',
+  oscar.balance().toString(),
+  `${oscar.balance().toString() == '1000000500000' ? '✅' : '❌'}`
+);
+
+/** However, if Eve is malicious and finds out Alice's note, she can withdraw the funds
+ * before Bob and Oscar. To prevent this, Alice can specify an address to withdraw to
+ * when she deposits. This address can be Bob's or Oscar's, or even her own.
+ */
+console.log('#**********************#');
+console.log(
+  ' Alice deposits and want Bob to withdraw. To prevent Eve from stealing her funds, Alice specifies an address to withdraw to'
+);
+console.log('');
+
+console.log('Alice initial balance:', alice.balance().toString());
+console.log('Bob initial balance:', bob.balance().toString());
+console.log('Eve initial balance:', eve.balance().toString());
+
+console.log('Alice deposit of Type 1 (100000 tokens)...');
+let aliceNote_3 = await depositWrapper(Field(1), alice, bob);
+console.log(
+  'Alice balance:',
+  alice.balance().toString(),
+  `${alice.balance().toString() === '999999400000' ? '✅' : '❌'}`
+);
+
+console.log('Eve tries to claim Type 1 (100000 tokens)...');
+try {
+  await withdrawWrapper(eve, aliceNote_3);
+} catch (error) {
+  console.log(
+    'Error while Eve tries to claim Type 1 (100000 tokens):',
+    (error as Error).message.split('\n')[0]
+  );
+}
+
+console.log('Now Bob tries to claim Type 1 (100000 tokens)...');
+await withdrawWrapper(bob, aliceNote_3);
+
 console.log('Alice balance:', alice.balance().toString());
 console.log('Bob balance:', bob.balance().toString());

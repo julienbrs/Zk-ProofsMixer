@@ -57,7 +57,7 @@ export class ZkMixer extends SmartContract {
     key.assertEquals(commitment); // check the commitment is in the tree
 
     // compute the root after the deposit
-    const [rootAfter, _] = witness.computeRootAndKey(depositType);
+    const [rootAfter] = witness.computeRootAndKey(depositType);
 
     // set the new root
     this.commitmentsRoot.set(rootAfter);
@@ -147,6 +147,9 @@ export class ZkMixer extends SmartContract {
       Field(1000000),
     ]);
     const amountToWithdraw: UInt64 = new UInt64(amountToWithdrawField);
+
+    console.log('depositType', depositType);
+    console.log('amountToWithdraw', amountToWithdrawField);
 
     // Withdraw funds
     this.send({ to: this.sender, amount: amountToWithdraw });
