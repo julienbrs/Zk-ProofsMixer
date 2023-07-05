@@ -1,8 +1,12 @@
 import { Field, MerkleMap, Mina, PrivateKey } from 'snarkyjs';
 
-import { DepositNote, KeyPair, LocalState } from './types';
-import { ZkMixer } from './zkMixer';
-import { deployAndInit, depositWrapper, withdrawWrapper } from './utils';
+import { DepositNote, KeyPair, LocalState } from './types.js';
+import { ZkMixer } from './zkMixer.js';
+import {
+  deployAndInit,
+  depositWrapper,
+  withdrawWrapper,
+} from './utils/index.js';
 
 console.log(`
                                                                              
@@ -21,25 +25,14 @@ console.log(`
 // State and types setup
 // --------------------------------------
 
+const enable_logging = true;
+
 let app: ZkMixer, keys: KeyPair, state: LocalState, deployer: KeyPair;
 
 state = {
   localCommitmentsMap: new MerkleMap(),
   localNullifierHashedMap: new MerkleMap(),
 };
-
-class User {
-  keys: KeyPair;
-
-  constructor(index: number) {
-    this.keys.publicKey = Local.testAccounts[index].publicKey;
-    this.keys.privateKey = Local.testAccounts[index].privateKey;
-  }
-
-  balance(): bigint {
-    return Mina.getAccount(this.keys.publicKey).balance.toBigInt();
-  }
-}
 
 // --------------------------------------
 // Mina blockchain setup
@@ -63,9 +56,27 @@ await deployAndInit(app, keys.privateKey, deployer);
 
 console.log('zkMixer deployed and initialized');
 
+class User {
+  keys: KeyPair;
+
+  constructor(index: number) {
+    this.keys = Local.testAccounts[index];
+  }
+
+  balance(): bigint {
+    return Mina.getAccount(this.keys.publicKey).balance.toBigInt();
+  }
+}
+
 // --------------------------------------
-// Helpers for deposit and withdraw
+// Helpers for deposit, withdraw and logs
 // --------------------------------------
+
+const log = (...args: any[]) => {
+  if (enable_logging) {
+    console.log('[DEBUG]', ...args);
+  }
+};
 
 async function deposit(
   depositType: Field,
@@ -77,12 +88,13 @@ async function deposit(
     state,
     depositType,
     caller.keys,
-    addressToWithdraw?.keys?.publicKey.toFields()[0]
+    addressToWithdraw?.keys?.publicKey.toFields()[0],
+    log
   );
 }
 
 async function withdraw(caller: User, note: DepositNote) {
-  return await withdrawWrapper(app, state, caller.keys, note);
+  return await withdrawWrapper(app, state, caller.keys, note, log);
 }
 
 // --------------------------------------

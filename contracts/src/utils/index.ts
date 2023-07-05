@@ -41,6 +41,7 @@ const deployAndInit = async (
  * @param caller - the caller's keys
  * @param addressToWithdraw - the address to withdraw to, if null then it is withdrawable to any address
  * that got the note
+ * @param log - a function to log messages
  * @returns {userNonce, nullifier} - the user's nonce and nullifier
  */
 async function depositWrapper(
@@ -48,8 +49,12 @@ async function depositWrapper(
   state: LocalState,
   depositType: Field,
   caller: KeyPair,
-  addressToWithdraw: Field = Field(0)
+  addressToWithdraw: Field = Field(0),
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  log: (...args: any[]) => void = () => {}
 ): Promise<DepositNote> {
+  log(`Deposit of type ${depositType} started`);
+
   // get caller's information
   const callerAccount = Mina.getAccount(caller.publicKey);
   const depositNonce = callerAccount.nonce;
@@ -60,6 +65,7 @@ async function depositWrapper(
   const commitment = Poseidon.hash(
     [depositNonce.toFields(), nullifier, depositType, addressToWithdraw].flat()
   );
+  log(`Commitment: ${commitment}`);
 
   // get the witness for the current tree
   const commitmentWitness = state.localCommitmentsMap.getWitness(commitment);
@@ -73,6 +79,9 @@ async function depositWrapper(
 
   // update the leaf locally if the deposit was successful
   state.localCommitmentsMap.set(commitment, depositType);
+  log(`Deposit ${depositNonce} of type ${depositType} was successful`);
+  log(`New commitment tree root: ${state.localCommitmentsMap.getRoot()}`);
+  log(`Contract commitment tree root: ${app.commitmentsRoot.get().toString()}`);
 
   // return deposit note for withdrawal
   return {
@@ -92,16 +101,22 @@ async function depositWrapper(
  * @param caller - the caller's public key
  * @param depositType - the type of deposit to make
  * @param addressToWithdraw - the address to withdraw to, if null then it is withdrawable to any address
+ * @param log - a function to log messages
  * that got the note
  */
 async function withdrawWrapper(
   app: ZkMixer,
   state: LocalState,
   caller: KeyPair,
-  note: DepositNote
+  note: DepositNote,
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  log: (...args: any[]) => void = () => {}
 ) {
+  log(`Withdrawal of note ${note.nonce} started`);
+
   // if `addressToWithdraw` is null, then `addressToWithdrawField` will be Field(0) so it won't change the hash
   let addressToWithdrawField = note?.addressToWithdraw ?? Field(0);
+  log(`Address to withdraw: ${addressToWithdrawField}`);
 
   // calculate the expected commitment used when depositing
   const expectedCommitment = Poseidon.hash(
@@ -112,6 +127,7 @@ async function withdrawWrapper(
       addressToWithdrawField,
     ].flat()
   );
+  log(`Expected commitment: ${expectedCommitment}`);
 
   // hash the nullifier
   const nullifierHashed = Poseidon.hash([note.nullifier]);
@@ -121,6 +137,7 @@ async function withdrawWrapper(
     state.localCommitmentsMap.getWitness(expectedCommitment);
   const nullifierWitness =
     state.localNullifierHashedMap.getWitness(nullifierHashed);
+
   // ... and update the leaf locally
   state.localCommitmentsMap.set(expectedCommitment, Field(1));
 
@@ -142,6 +159,9 @@ async function withdrawWrapper(
 
   // update the nullifier hash map if the withdrawal was successful
   state.localNullifierHashedMap.set(nullifierHashed, Field(1));
+  log(`Withdrawal of note ${note.nonce} was successful`);
+  log(`New commitment tree root: ${state.localCommitmentsMap.getRoot()}`);
+  log(`Contract commitment tree root: ${app.commitmentsRoot.get().toString()}`);
 }
 
 /**

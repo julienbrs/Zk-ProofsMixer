@@ -14,7 +14,7 @@ import {
   MerkleMap,
 } from 'snarkyjs';
 
-import { DepositEvent } from './types';
+import { DepositEvent } from './types.js';
 
 // Constants
 export const POOLS = {
