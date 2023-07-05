@@ -56,14 +56,12 @@ ZkMixer is a non-custodial Mina protocol and token privacy solution based on zkS
 
 The concept of ZkMixer draws inspiration from the Tornado Cash project on Ethereum, but implements it within the Mina ecosystem, creating an opportunity for truly private transactions on the Mina blockchain.
 
-Test the dApp here: [Website]()
-
 The ZkMixer project has been extensively tested (you can run start running tests now because it takes 5 minutes to run it all, please see the [Getting Started](#getting-started) section for more details), has been deployed on the Mina testnet and the frontend is deployed with Vercel.
 
 <br />
 
 <p align="center">
-  <img src="assets/zkMixerScreen.png" alt="Dapp ZkMixer Screenshot"/>
+  <img src="assets/zkmixer_dapp.png" alt="Dapp ZkMixer Screenshot"/>
 </p>
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -79,12 +77,18 @@ The typical use case of the contract is as follows: Alice deposits tokens into t
 
 For the frontend, we utilize events to rebuild the entire Merkle tree. This might not be the most optimal situation due to its scalability limit; as the number of deposits grows, the process becomes increasingly slower. However, it allows each participant to have a complete Merkle tree, thus eliminating the need for off-chain storage and making the entire system 100% decentralized.
 
+<p align="center">
+  <img src="assets/zkmixer_loading.png" alt="Dapp ZkMixer Screenshot"/>
+  Recovering the Merkle tree from events
+</p>
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 ## Key Features
 
 - Anonymity: ZkMixer employs zk-SNARKs (Zero-Knowledge Succinct Non-Interactive Argument of Knowledge) to ensure the privacy of transactions.
 - Non-Custodial: ZkMixer does not hold custody of your tokens. You have full control of your assets.
 - Fully Decentralized: ZkMixer is a decentralized application (dApp) that runs on the Mina blockchain without the need of off-chain storage.
-- sOpen Source: The project is open source, so anyone can review, use or contribute to the project.
+- Open Source: The project is open source, so anyone can review, use or contribute to the project.
 
 <!-- GETTING STARTED -->
 
@@ -97,7 +101,8 @@ To test the dApp (website), you will need:
 - A web3 wallet, such as [Auro Wallet](https://www.aurowallet.com/)
 - A Mina account with some tokens
 
-You can then test the dApp here: [Website]()
+You can then test the dApp here: [Website](zkmixer.vercel.app)
+We didn't have time to deploy.
 
 ### Local installation
 
@@ -168,7 +173,12 @@ We welcome all feedback and contributions to make ZkMixer the go-to privacy solu
 
 </br>
 
-<!-- CONTACT -->
+### Challenges and Difficulties
+
+ZkMixer was our first foray into zk-SNARKs and the Mina protocol. Our journey started at ETH Tokyo, where inspiring dialogues with the Mina team led us to this hackathon. The learning curve was steep, and the majority of our time was devoted to understanding these complex concepts. Despite the short coding window of four days that we had, we were able to create a functional, though not yet complete, project.
+
+Limitations in TypeScript caused deployment difficulties: we have to get the nonce and pass it as a `Field` with `nonce.toFields()`, however we didn't find a way to do it in a browser environment within the given timeframe.
+Moreover, some parts of the UI remain unfinished (input field to specify a withdraw address is not implemented), but the project proved successful in local testing. This experience has been profoundly enriching, providing us with practical insights into the intricacies of zk-SNARKs and blockchain development.
 
 ### License
 
@@ -190,7 +200,6 @@ For those interested in diving deeper into the concepts of privacy and mixers, w
 
 ## Contact
 
-Website: [dApp]()
 <br />
 Twitter:
 
