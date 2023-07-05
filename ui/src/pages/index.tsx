@@ -1,14 +1,10 @@
-import Head from "next/head";
-import Image from "next/image";
-import GradientBG from "../components/GradientBG.js";
-import styles from "../styles/Home.module.css";
-
 import { useEffect, useState } from "react";
 
 import ZkappWorkerClient from "./zkappWorkerClient";
 import { PublicKey, Field, UInt32, MerkleMap, Poseidon } from "snarkyjs";
 import { buildCommitmentsTreeFromEvents, buildNullifierHashedTreeFromEvents } from "@contracts/utils";
 import { DepositNote } from "@contracts/types";
+import { Box, DarkMode, useColorMode, useColorModeValue } from '@chakra-ui/react';
 
 const CONTRACT_ADDRESS =
   "B62qjDaVbV4tPuB9cn9kBXvrfhaYSvVyMjhZQcuvchRjeuQLWUKJWiR";
@@ -116,7 +112,7 @@ export default function Home() {
   useEffect(() => {
     (async () => {
       if (state.hasBeenSetup && !state.accountExists) {
-        for (;;) {
+        for (; ;) {
           console.log("checking if account exists...");
           const res = await state.zkappWorkerClient!.fetchAccount({
             publicKey: state.publicKey!,
@@ -342,6 +338,9 @@ export default function Home() {
   // -------------------------------------------------------
   // UI
 
+  const bgGradientLight = 'linear(to-t, #fbf1ed, #ffffff)'
+  const bgGradientDark = 'linear(to-t, #0f0c17, #0f0c17)'
+
   let hasWallet;
   if (state.hasWallet != null && !state.hasWallet) {
     const auroLink = "https://www.aurowallet.com/";
@@ -388,6 +387,7 @@ export default function Home() {
   if (state.hasBeenSetup && state.accountExists) {
     mainContent = (
       <div>
+
         <div>
           <h2>zkApp State</h2>
           <div>
@@ -513,136 +513,23 @@ export default function Home() {
   );
 
   return (
-    <div style={{ padding: "20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <div>
-          {setup}
-          {accountDoesNotExist}
-          {mainContent}
-        </div>
+    <Box bgGradient={bgGradientLight} >
+      <div style={{ padding: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', minHeight: '100vh' }}>
 
-        <div>{debug}</div>
+          <div>
+            {setup}
+            {accountDoesNotExist}
+            {mainContent}
+          </div>
+
+          <div>
+            {debug}
+          </div>
+
+        </div>
       </div>
-    </div>
+    </Box>
   );
 
-  // return (
-  //   <>
-  //     <Head>
-  //       <title>Mina zkApp UI</title>
-  //       <meta name="description" content="built with SnarkyJS" />
-  //       <link rel="icon" href="/assets/favicon.ico" />
-  //     </Head>
-  //     <GradientBG>
-  //       <main className={styles.main}>
-  //         <div className={styles.center}>
-  //           <a
-  //             href="https://minaprotocol.com/"
-  //             target="_blank"
-  //             rel="noopener noreferrer"
-  //           >
-  //             <Image
-  //               className={styles.logo}
-  //               src="/assets/HeroMinaLogo.svg"
-  //               alt="Mina Logo"
-  //               width="191"
-  //               height="174"
-  //               priority
-  //             />
-  //           </a>
-  //           <p className={styles.tagline}>
-  //             built with
-  //             <code className={styles.code}> SnarkyJS</code>
-  //           </p>
-  //         </div>
-  //         <p className={styles.start}>
-  //           Get started by editing
-  //           <code className={styles.code}> src/pages/index.tsx</code>
-  //         </p>
-  //         <div className={styles.grid}>
-  //           <a
-  //             href="https://docs.minaprotocol.com/zkapps"
-  //             className={styles.card}
-  //             target="_blank"
-  //             rel="noopener noreferrer"
-  //           >
-  //             <h2>
-  //               <span>DOCS</span>
-  //               <div>
-  //                 <Image
-  //                   src="/assets/arrow-right-small.svg"
-  //                   alt="Mina Logo"
-  //                   width={16}
-  //                   height={16}
-  //                   priority
-  //                 />
-  //               </div>
-  //             </h2>
-  //             <p>Explore zkApps, how to build one, and in-depth references</p>
-  //           </a>
-  //           <a
-  //             href="https://docs.minaprotocol.com/zkapps/tutorials/hello-world"
-  //             className={styles.card}
-  //             target="_blank"
-  //             rel="noopener noreferrer"
-  //           >
-  //             <h2>
-  //               <span>TUTORIALS</span>
-  //               <div>
-  //                 <Image
-  //                   src="/assets/arrow-right-small.svg"
-  //                   alt="Mina Logo"
-  //                   width={16}
-  //                   height={16}
-  //                   priority
-  //                 />
-  //               </div>
-  //             </h2>
-  //             <p>Learn with step-by-step SnarkyJS tutorials</p>
-  //           </a>
-  //           <a
-  //             href="https://discord.gg/minaprotocol"
-  //             className={styles.card}
-  //             target="_blank"
-  //             rel="noopener noreferrer"
-  //           >
-  //             <h2>
-  //               <span>QUESTIONS</span>
-  //               <div>
-  //                 <Image
-  //                   src="/assets/arrow-right-small.svg"
-  //                   alt="Mina Logo"
-  //                   width={16}
-  //                   height={16}
-  //                   priority
-  //                 />
-  //               </div>
-  //             </h2>
-  //             <p>Ask questions on our Discord server</p>
-  //           </a>
-  //           <a
-  //             href="https://docs.minaprotocol.com/zkapps/how-to-deploy-a-zkapp"
-  //             className={styles.card}
-  //             target="_blank"
-  //             rel="noopener noreferrer"
-  //           >
-  //             <h2>
-  //               <span>DEPLOY</span>
-  //               <div>
-  //                 <Image
-  //                   src="/assets/arrow-right-small.svg"
-  //                   alt="Mina Logo"
-  //                   width={16}
-  //                   height={16}
-  //                   priority
-  //                 />
-  //               </div>
-  //             </h2>
-  //             <p>Deploy a zkApp to Berkeley Testnet</p>
-  //           </a>
-  //         </div>
-  //       </main>
-  //     </GradientBG>
-  //   </>
-  // );
 }
