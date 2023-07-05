@@ -328,7 +328,10 @@ describe('ZkMixer', () => {
 
     it('should not allow a withdrawal of type different than the deposit type', async () => {
       const depositType1 = Field(1);
-      const note = await depositWrapper(app, state, depositType1, users[0]);
+      let note = await depositWrapper(app, state, depositType1, users[0]);
+
+      // Change the deposit type to Type2
+      note.depositType = Field(2);
 
       // Attempt to withdraw a Type2 deposit while it's a Type1 deposit
       await expect(
@@ -364,7 +367,10 @@ describe('ZkMixer', () => {
 
     it('should not allow withdrawal with invalid nullifier', async () => {
       const depositType1 = Field(1);
-      const note = await depositWrapper(app, state, depositType1, users[0]);
+      let note = await depositWrapper(app, state, depositType1, users[0]);
+
+      // Change the nullifier to an invalid one
+      note.nullifier = Field.random();
 
       // Attempt to withdraw with an invalid nullifier
       await expect(
