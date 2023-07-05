@@ -12,6 +12,19 @@ import {
 
 import { ZkMixer } from './zkMixer.js';
 
+console.log(`
+                                                                             
+                                                                             
+███████╗██╗  ██╗███╗   ███╗██╗██╗  ██╗███████╗██████╗ 
+╚══███╔╝██║ ██╔╝████╗ ████║██║╚██╗██╔╝██╔════╝██╔══██╗
+  ███╔╝ █████╔╝ ██╔████╔██║██║ ╚███╔╝ █████╗  ██████╔╝
+ ███╔╝  ██╔═██╗ ██║╚██╔╝██║██║ ██╔██╗ ██╔══╝  ██╔══██╗
+███████╗██║  ██╗██║ ╚═╝ ██║██║██╔╝ ██╗███████╗██║  ██║
+╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+                                                                             
+                                                      
+                                                      `);
+
 const DEPOSIT_AMOUNT: Array<bigint> = [
   BigInt(100000),
   BigInt(500000),
@@ -183,32 +196,32 @@ let eve = new User(4);
 
 /* Common usage: Alice deposits, Bob withdraws */
 
-console.log('#**********************#');
-console.log('Basic scenario: Alice deposits twice, Bob and Oscar withdraw');
-console.log('');
+console.log('\n#**********************#\n');
 
-console.log('Alice balance:', alice.balance().toString());
-console.log('Bob balance:', bob.balance().toString());
-console.log('Oscar balance:', oscar.balance().toString());
+console.log(
+  '\x1b[36mBasic scenario: Alice deposits twice, Bob and Oscar withdraw\x1b[0m'
+);
+console.log('Alice balance:\x1b[33m', alice.balance().toString(), '\x1b[0m');
+console.log('Bob balance:\x1b[33m', bob.balance().toString(), '\x1b[0m');
+console.log('Oscar balance:\x1b[33m', oscar.balance().toString(), '\x1b[0m');
 console.log('');
 
 console.log(
   'Alice deposit of Type 1 (100000 tokens) and Type 2 (500000 tokens)...'
 );
 let aliceNote_1 = await depositWrapper(Field(1), alice);
-let aliceNote_2 = await depositWrapper(Field(3), alice); // todo: to change to field(2) again, only for debug atm
-console.log(
-  'Alice balance:',
-  alice.balance().toString(),
-  `${alice.balance().toString() === '999999400000' ? '✅' : '❌'}`
-);
-console.log('');
+let aliceNote_2 = await depositWrapper(Field(2), alice);
 
 console.log(
   'Bob claims Type 1 (100000 tokens) and Oscar Type 2 (500000 tokens)...'
 );
 await withdrawWrapper(bob, aliceNote_1);
 await withdrawWrapper(oscar, aliceNote_2);
+console.log(
+  'Alice balance:',
+  alice.balance().toString(),
+  `${alice.balance().toString() === '999999400000' ? '✅' : '❌'}`
+);
 console.log(
   'Bob balance:',
   bob.balance().toString(),
@@ -224,23 +237,15 @@ console.log(
  * before Bob and Oscar. To prevent this, Alice can specify an address to withdraw to
  * when she deposits. This address can be Bob's or Oscar's, or even her own.
  */
-console.log('#**********************#');
 console.log(
-  ' Alice deposits and want Bob to withdraw. To prevent Eve from stealing her funds, Alice specifies an address to withdraw to'
+  '\n\n######################################################################\n'
 );
-console.log('');
-
-console.log('Alice initial balance:', alice.balance().toString());
-console.log('Bob initial balance:', bob.balance().toString());
-console.log('Eve initial balance:', eve.balance().toString());
+console.log(
+  '\x1b[36mAlice deposits and want Bob to withdraw. To prevent Eve from stealing her funds, Alice specifies an address to withdraw to\x1b[0m \n'
+);
 
 console.log('Alice deposit of Type 1 (100000 tokens)...');
 let aliceNote_3 = await depositWrapper(Field(1), alice, bob);
-console.log(
-  'Alice balance:',
-  alice.balance().toString(),
-  `${alice.balance().toString() === '999999400000' ? '✅' : '❌'}`
-);
 
 console.log('Eve tries to claim Type 1 (100000 tokens)...');
 try {
@@ -248,12 +253,27 @@ try {
 } catch (error) {
   console.log(
     'Error while Eve tries to claim Type 1 (100000 tokens):',
-    (error as Error).message.split('\n')[0]
+    '\x1b[31m',
+    (error as Error).message.split('\n')[0],
+    '\x1b[0m'
   );
 }
 
 console.log('Now Bob tries to claim Type 1 (100000 tokens)...');
 await withdrawWrapper(bob, aliceNote_3);
 
-console.log('Alice balance:', alice.balance().toString());
-console.log('Bob balance:', bob.balance().toString());
+console.log(
+  'Alice balance:',
+  alice.balance().toString(),
+  `${alice.balance().toString() === '999999300000' ? '✅' : '❌'}`
+);
+console.log(
+  'Alice balance:\x1b[33m',
+  alice.balance().toString(),
+  `${alice.balance().toString() === '999999300000' ? '✅' : '❌'}\x1b[0m`
+);
+console.log(
+  'Bob balance:\x1b[33m',
+  bob.balance().toString(),
+  `${bob.balance().toString() === '1000000200000' ? '✅' : '❌'}\x1b[0m`
+);
