@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 
 import ZkappWorkerClient from './zkappWorkerClient';
 import { PublicKey, Field, UInt32 } from 'snarkyjs';
+import { Box, DarkMode, useColorMode, useColorModeValue } from '@chakra-ui/react';
 
 const CONTRACT_ADDRESS = 'B62qjKo8hYqsdjw68hSBB9XaURdNa2JQGi63yLDfVDAx21cnSdEfBeP';
 let transactionFee = 0.1;
@@ -43,35 +44,35 @@ export default function Home() {
       if (!state.hasBeenSetup) {
         const zkappWorkerClient = new ZkappWorkerClient();
         await zkappWorkerClient.setActiveInstanceToBerkeley();
-  
+
         const mina = (window as any).mina;
-        
+
         if (mina == null) {
           setState({ ...state, hasWallet: false });
           return;
         }
-        
+
         const publicKeyBase58: string = (await mina.requestAccounts())[0];
         const publicKey = PublicKey.fromBase58(publicKeyBase58);
-        
+
         console.log('using key', publicKey.toBase58());
-        
+
         console.log('checking if account exists...');
         const res = await zkappWorkerClient.fetchAccount({
           publicKey: publicKey!
         });
         const accountExists = res.error == null;
-        
+
         await zkappWorkerClient.loadContract();
-        
+
         console.log('compiling zkApp');
         await zkappWorkerClient.compileContract();
         console.log('zkApp compiled');
-        
+
         const zkappPublicKey = PublicKey.fromBase58(CONTRACT_ADDRESS);
-        
+
         await zkappWorkerClient.initZkappInstance(zkappPublicKey);
-        
+
         console.log('getting zkApp state...');
         await zkappWorkerClient.fetchAccount({ publicKey: zkappPublicKey })
 
@@ -81,17 +82,17 @@ export default function Home() {
           currentCommitmentsRoot: currentCommitmentsRoot.toString(),
           currentNullifierHashesRoot: currentNullifierHashesRoot.toString(),
         });
-        
+
         setState({
-            ...state,
-            zkappWorkerClient,
-            hasWallet: true,
-            hasBeenSetup: true,
-            publicKey,
-            zkappPublicKey,
-            accountExists,
-            currentCommitmentsRoot,
-            currentNullifierHashesRoot,
+          ...state,
+          zkappWorkerClient,
+          hasWallet: true,
+          hasBeenSetup: true,
+          publicKey,
+          zkappPublicKey,
+          accountExists,
+          currentCommitmentsRoot,
+          currentNullifierHashesRoot,
         });
       }
     })();
@@ -99,11 +100,11 @@ export default function Home() {
 
   // -------------------------------------------------------
   // Wait for account to exist, if it didn't
-  
+
   useEffect(() => {
     (async () => {
       if (state.hasBeenSetup && !state.accountExists) {
-        for (;;) {
+        for (; ;) {
           console.log("checking if account exists...");
           const res = await state.zkappWorkerClient!.fetchAccount({
             publicKey: state.publicKey!,
@@ -235,11 +236,11 @@ export default function Home() {
 
   // -------------------------------------------------------
   // Refresh the current state
-  
+
   const onRefresh = async () => {
     console.log('getting zkApp state...');
     await state.zkappWorkerClient!.fetchAccount({
-         publicKey: state.zkappPublicKey!
+      publicKey: state.zkappPublicKey!
     })
     const currentCommitmentsRoot = await state.zkappWorkerClient!.getCommitmentsRoot();
     const currentNullifierHashesRoot = await state.zkappWorkerClient!.getNullifierHashesRoot();
@@ -248,12 +249,15 @@ export default function Home() {
       currentCommitmentsRoot: currentCommitmentsRoot.toString(),
       currentNullifierHashesRoot: currentNullifierHashesRoot.toString(),
     });
-  
+
     setState({ ...state, currentCommitmentsRoot, currentNullifierHashesRoot });
   }
-  
+
   // -------------------------------------------------------
   // UI
+
+  const bgGradientLight = 'linear(to-t, #fbf1ed, #ffffff)'
+  const bgGradientDark = 'linear(to-t, #0f0c17, #0f0c17)'
 
   let hasWallet;
   if (state.hasWallet != null && !state.hasWallet) {
@@ -301,6 +305,7 @@ export default function Home() {
   if (state.hasBeenSetup && state.accountExists) {
     mainContent = (
       <div>
+
         <div>
           <h2>zkApp State</h2>
           <div>Current commitmentsRoot: {state.currentCommitmentsRoot!.toString()}</div>
@@ -416,21 +421,23 @@ export default function Home() {
   )
 
   return (
-    <div style={{ padding: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+    <Box bgGradient={bgGradientLight} >
+      <div style={{ padding: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', minHeight: '100vh' }}>
 
-        <div>
-          {setup}
-          {accountDoesNotExist}
-          {mainContent}
+          <div>
+            {setup}
+            {accountDoesNotExist}
+            {mainContent}
+          </div>
+
+          <div>
+            {debug}
+          </div>
+
         </div>
-
-        <div>
-          {debug}
-        </div>
-
       </div>
-    </div>
+    </Box>
   );
 
   // return (
