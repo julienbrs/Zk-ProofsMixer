@@ -23,8 +23,9 @@
         "resolveJsonModule": true,
         "jsx": "preserve",
         "paths": {
-          "@/*": ["./src/*"]
-    }
+          "@/*": ["./src/*"],
+          "@contracts/*": ["./contracts/build/src/*"],
+        }
       },
     "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
     "exclude": ["node_modules"]

@@ -14,7 +14,7 @@ import {
   MerkleMap,
 } from 'snarkyjs';
 
-import { DepositEvent } from './types.js';
+import { DepositEvent, WithdrawEvent } from './types.js';
 
 // Constants
 export const POOLS = {
@@ -23,6 +23,7 @@ export const POOLS = {
   3: 1000000,
 };
 const NOT_DEPOSITED = Field(0);
+const SPENT = Field(1);
 
 // Error messages
 const DEPOSIT_TYPE_ERROR_MSG = 'depositType must be 1, 2 or 3';
@@ -37,6 +38,7 @@ export class ZkMixer extends SmartContract {
 
   events = {
     deposit: DepositEvent,
+    withdraw: WithdrawEvent,
   };
 
   @method initState() {
@@ -137,7 +139,7 @@ export class ZkMixer extends SmartContract {
     const [oldRootNullifier, key] =
       nullifierWitness.computeRootAndKey(notSpent);
     oldRootNullifier.assertEquals(
-      this.nullifierHashesRoot.get(),
+      this.nullifierHashesRoot.getAndAssertEquals(),
       WITHDRAW_SPENT_ERROR_MSG
     );
 
@@ -153,7 +155,7 @@ export class ZkMixer extends SmartContract {
       commitmentWitness.computeRootAndKey(depositType);
 
     expectedRootCommitment.assertEquals(
-      this.commitmentsRoot.get(),
+      this.commitmentsRoot.getAndAssertEquals(),
       WITHDRAW_INVALID_COMMITMENT_ERROR_MSG
     );
     keyCommitment.assertEquals(
@@ -162,9 +164,13 @@ export class ZkMixer extends SmartContract {
     );
 
     // Consuming the commitment
-    const spent = Field(1);
-    const [newNullifierRoot, _] = nullifierWitness.computeRootAndKey(spent);
+    const [newNullifierRoot, nullifierKey] =
+      nullifierWitness.computeRootAndKey(SPENT);
     this.nullifierHashesRoot.set(newNullifierRoot);
+    nullifierKey.assertEquals(
+      hashedNullifier,
+      WITHDRAW_INVALID_NULLIFIER_ERROR_MSG
+    );
 
     // Calculate the amount to withdraw
     const whatTypeBool: Bool[] = [1, 2, 3].map((i) => depositType.equals(i));
@@ -177,5 +183,10 @@ export class ZkMixer extends SmartContract {
 
     // Withdraw funds
     this.send({ to: this.sender, amount: amountToWithdraw });
+
+    // emit event
+    this.emitEvent('withdraw', {
+      hashedNullifier,
+    });
   }
 }

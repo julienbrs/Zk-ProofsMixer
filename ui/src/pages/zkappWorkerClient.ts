@@ -1,10 +1,12 @@
-import { fetchAccount, PublicKey, PrivateKey, Field } from "snarkyjs";
+import { fetchAccount, PublicKey, Field, MerkleMapWitness, UInt32 } from "snarkyjs";
 
 import type {
   ZkappWorkerRequest,
   ZkappWorkerReponse,
   WorkerFunctions,
 } from "./zkappWorker";
+
+import { DepositEvent, WithdrawEvent } from "@contracts/types";
 
 export default class ZkappWorkerClient {
   // ---------------------------------------------------------------------------------------
@@ -50,7 +52,7 @@ export default class ZkappWorkerClient {
 
   createDepositTransaction(
     commitment: Field,
-    witness: Field,
+    witness: MerkleMapWitness,
     depositType: Field
   ) {
     return this._call("createDepositTransaction", {
@@ -62,9 +64,9 @@ export default class ZkappWorkerClient {
 
   createWithdrawTransaction(
     nullifier: Field,
-    nullifierWitness: Field,
-    commitmentWitness: Field,
-    nonce: number,
+    nullifierWitness: MerkleMapWitness,
+    commitmentWitness: MerkleMapWitness,
+    nonce: UInt32,
     depositType: Field,
     specificAddressField: Field
   ) {
@@ -74,7 +76,7 @@ export default class ZkappWorkerClient {
       commitmentWitness,
       nonce,
       depositType,
-      specificAddressField
+      specificAddressField,
     });
   }
 
@@ -85,6 +87,16 @@ export default class ZkappWorkerClient {
   async getTransactionJSON() {
     const result = await this._call("getTransactionJSON", {});
     return result;
+  }
+
+  async fetchDepositEvents(): Promise<DepositEvent[]> {
+    const result = await this._call("fetchDepositEvents", {});
+    return JSON.parse(result as string);
+  }
+
+  async fetchWithdrawEvents(): Promise<WithdrawEvent[]> {
+    const result = await this._call("fetchWithdrawEvents", {});
+    return JSON.parse(result as string);
   }
 
   // ---------------------------------------------------------------------------------------
@@ -128,7 +140,9 @@ export default class ZkappWorkerClient {
   }
 
   constructor() {
-    this.worker = new Worker(new URL("./zkappWorker.ts", import.meta.url), { type: "module" });
+    this.worker = new Worker(new URL("./zkappWorker.ts", import.meta.url), {
+      type: "module",
+    });
     this.promises = {};
     this.nextId = 0;
     this.isReady = false;
