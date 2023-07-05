@@ -6,10 +6,10 @@ import {
   Poseidon,
   PrivateKey,
   PublicKey,
-  UInt32,
 } from 'snarkyjs';
 
-import { ZkMixer } from './zkMixer.js';
+import { DepositNote } from './types';
+import { ZkMixer } from './zkMixer';
 
 console.log(`
                                                                              
@@ -23,12 +23,6 @@ console.log(`
                                                                              
                                                       
                                                       `);
-
-// const DEPOSIT_AMOUNT: Array<bigint> = [
-//   BigInt(100000),
-//   BigInt(500000),
-//   BigInt(1000000),
-// ];
 
 // --------------------------------------
 // State and types setup
@@ -44,14 +38,6 @@ let zkMixer: ZkMixer,
 
 userCommitments = new MerkleMap();
 userHashedNullifiers = new MerkleMap();
-
-interface DepositNote {
-  nonce: UInt32;
-  commitment: Field;
-  nullifier: Field;
-  depositType: Field;
-  addressToWithdrawField: Field;
-}
 
 class User {
   publicKey: PublicKey;
