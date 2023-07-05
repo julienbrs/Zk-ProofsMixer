@@ -25,7 +25,7 @@ console.log(`
 // State and types setup
 // --------------------------------------
 
-const enable_logging = true;
+const enable_logging = false;
 
 let app: ZkMixer, keys: KeyPair, state: LocalState, deployer: KeyPair;
 
@@ -72,6 +72,7 @@ class User {
 // Helpers for deposit, withdraw and logs
 // --------------------------------------
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const log = (...args: any[]) => {
   if (enable_logging) {
     console.log('[DEBUG]', ...args);

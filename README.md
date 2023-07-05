@@ -19,17 +19,29 @@
     <a href="#about-the-project">About The Project</a>
 </li>
 <li>
-    <a href="#getting-started">Getting Started</a>
+    <a href="#how-it-works">How It Works</a>
+</li>
+<li>
+    <a href="#key-features">Key Features</a>
+</li>
+<li>
+    <a href="#how-to-test">How to Test</a>
     <ul>
-    <li><a href="#prerequisites">Prerequisites</a></li>
-    <li><a href="#installation">Installation</a></li>
+    <li><a href="#dapp">dApp</a></li>
+    <li><a href="#local-installation">Local Installation</a></li>
     </ul>
 </li>
 <li>
-    <a href="#goal">Goal</a>
+    <a href="#more-to-come">More to Come</a>
 </li>
 <li>
-    <a href="#features">Features</a>
+    <a href="#license">License</a>
+</li>
+<li>
+    <a href="#contributing">Contributing</a>
+</li>
+<li>
+    <a href="#acknowledgements">Acknowledgements</a>
 </li>
 <li><a href="#contact">Contact</a></li>
 </ol>
@@ -82,18 +94,16 @@ For the frontend, we utilize events to rebuild the entire Merkle tree. This migh
 
 ## How to test
 
-To get a local copy up and running follow these simple example steps.
-
-### Prerequisites
+#### dApp
 
 To test the dApp (website), you will need:
 
-    A web3 wallet, such as [Auro Wallet](https://www.aurowallet.com/)
-    A Mina account with some tokens
+- A web3 wallet, such as [Auro Wallet](https://www.aurowallet.com/)
+- A Mina account with some tokens
 
 You can then test the dApp here: [Website]()
 
-### Installation
+### Local installation
 
 If you want to test and run the dApp locally, you will need:
 
@@ -124,13 +134,22 @@ Run the tests (it might take approximately 5 minutes to run all the tests).
 npm run test
 ```
 
-You can also run the integration tests to see some real use cases. If you want to see debug logs, please change `enable_logging` to `true` in `main.ts`.
+<p align="center">
+  <img src="assets/screenshot_test.png" alt="Unit tests ZkMixer Screenshot"/>
+</p>
+
+You can also run the integration tests to see some real use cases. If you want to see debug logs, please change `enable_logging` to `true` in `main.ts` at line 28 (do not forget to build again).
 
 ```sh
 node build/src/main.js
 ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<p align="center">
+  <img src="assets/screenshot_main.png" alt="Integration tests ZkMixer Screenshot"/>
+</p>
+
 
 <!-- GOAL -->
 
@@ -155,6 +174,25 @@ We welcome all feedback and contributions to make ZkMixer the go-to privacy solu
 </br>
 
 <!-- CONTACT -->
+
+### License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+### Contributing
+
+We welcome all contributions to the ZkMixer project. If you have any suggestions, please open an issue to discuss the changes you would like to make. You can also fork the repo and create a pull request with your changes, or contact us directly.
+
+## Acknowledgements
+
+We would like to express our deepest appreciation to Mina Protocol and Developer DAO for organizing this hackathon. Their initiatives like these offer significant opportunities for developers to learn, innovate, and contribute to the evolving blockchain space.
+
+We'd like to extend our thanks to Mina for providing an environment that encourages development and exploration. Their comprehensive documentation and resources available on the [Mina Protocol website](https://minaprotocol.com/) and [Mina Protocol Documentation](https://docs.minaprotocol.com/) have been invaluable in the development process and have greatly facilitated our understanding of the protocol.
+
+
+We would also like to highlight the insightful research paper ["PLUME: An ECDSA Nullifier Scheme for Unique Pseudonymity within Zero Knowledge Proofs"](https://eprint.iacr.org/2022/1255.pdf) by Aayush Gupta and Kobi Gurkan. This work was vital in deepening our understanding of ZK-SNARKs and their practical applications in enhancing privacy on the blockchain.
+
+For those interested in diving deeper into the concepts of privacy and mixers, we highly recommend reading the documentation of [Aztec](https://docs.aztec.network/aztec/protocol/trees) and [Tornado Cash](https://github.com/tornadocash). These resources provide a wealth of information on privacy-focused solutions in the crypto space.
 
 ## Contact
 
