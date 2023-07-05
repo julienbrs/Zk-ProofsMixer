@@ -196,7 +196,9 @@ let eve = new User(4);
 
 /* Common usage: Alice deposits, Bob withdraws */
 
-console.log('\n#**********************#\n');
+console.log(
+  '\n######################################################################\n'
+);
 
 console.log(
   '\x1b[36mBasic scenario: Alice deposits twice, Bob and Oscar withdraw\x1b[0m'
@@ -237,9 +239,7 @@ console.log(
  * before Bob and Oscar. To prevent this, Alice can specify an address to withdraw to
  * when she deposits. This address can be Bob's or Oscar's, or even her own.
  */
-console.log(
-  '\n\n######################################################################\n'
-);
+console.log('\n\n#**********************#\n');
 console.log(
   '\x1b[36mAlice deposits and want Bob to withdraw. To prevent Eve from stealing her funds, Alice specifies an address to withdraw to\x1b[0m \n'
 );
