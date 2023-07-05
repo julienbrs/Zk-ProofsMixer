@@ -7,7 +7,6 @@ import {
   PrivateKey,
   PublicKey,
   UInt32,
-  UInt64,
 } from 'snarkyjs';
 
 import { ZkMixer } from './zkMixer.js';
@@ -25,11 +24,11 @@ console.log(`
                                                       
                                                       `);
 
-const DEPOSIT_AMOUNT: Array<bigint> = [
-  BigInt(100000),
-  BigInt(500000),
-  BigInt(1000000),
-];
+// const DEPOSIT_AMOUNT: Array<bigint> = [
+//   BigInt(100000),
+//   BigInt(500000),
+//   BigInt(1000000),
+// ];
 
 // --------------------------------------
 // State and types setup
@@ -197,7 +196,7 @@ let eve = new User(4);
 /* Common usage: Alice deposits, Bob withdraws */
 
 console.log(
-  '\n######################################################################\n'
+  '\n#-----------------------------------------------------------------#\n'
 );
 
 console.log(
@@ -239,7 +238,7 @@ console.log(
  * before Bob and Oscar. To prevent this, Alice can specify an address to withdraw to
  * when she deposits. This address can be Bob's or Oscar's, or even her own.
  */
-console.log('\n\n#**********************#\n');
+console.log('\n\n************************\n');
 console.log(
   '\x1b[36mAlice deposits and want Bob to withdraw. To prevent Eve from stealing her funds, Alice specifies an address to withdraw to\x1b[0m \n'
 );
@@ -263,11 +262,6 @@ console.log('Now Bob tries to claim Type 1 (100000 tokens)...');
 await withdrawWrapper(bob, aliceNote_3);
 
 console.log(
-  'Alice balance:',
-  alice.balance().toString(),
-  `${alice.balance().toString() === '999999300000' ? '✅' : '❌'}`
-);
-console.log(
   'Alice balance:\x1b[33m',
   alice.balance().toString(),
   `${alice.balance().toString() === '999999300000' ? '✅' : '❌'}\x1b[0m`
@@ -276,4 +270,9 @@ console.log(
   'Bob balance:\x1b[33m',
   bob.balance().toString(),
   `${bob.balance().toString() === '1000000200000' ? '✅' : '❌'}\x1b[0m`
+);
+console.log(
+  'Eve balance:\x1b[33m',
+  eve.balance().toString(),
+  `${eve.balance().toString() === '1000000000000' ? '✅' : '❌'}\x1b[0m`
 );
