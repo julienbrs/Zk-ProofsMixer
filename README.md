@@ -69,8 +69,7 @@ The ZkMixer project has been extensively tested (you can run start running tests
 
 To make a deposit, a user generates a secret (referred to as a 'commitment') and sends it, along with the deposit type, to the ZkMixer smart contract. The contract acknowledges the deposit and adds the commitment to its deposit tree, which is a Merkle Map (similar as a Merkle Tree but with key-value pairs instead of indices).
 
-The deposit type indicates the quantity of tokens to deposit (1 for 100,000, 2 for 500,000, 3 for 1,000,000, be aware that it is 
-). Once the deposit is made, the state of the Merkle tree is updated to include the new commitment.
+The deposit type indicates the quantity of tokens to deposit (1 for 100,000, 2 for 500,000, 3 for 1,000,000, be aware that it is not Mina tokens but the smallest unit of Mina currency). Once the deposit is made, the state of the Merkle tree is updated to include the new commitment.
 
 Later, when the user decides to make a withdrawal, they need to provide a proof that they possess a secret to an unspent commitment from the smart contract’s deposit tree. zkSnark technology allows this to happen without revealing which exact deposit corresponds to this secret. The smart contract will check the proof and transfer the deposited tokens to the address specified for withdrawal. To an external observer, it will be impossible to determine which deposit this withdrawal originated from.
 
