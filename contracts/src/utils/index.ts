@@ -50,7 +50,7 @@ async function depositWrapper(
   depositType: Field,
   caller: KeyPair,
   addressToWithdraw: Field = Field(0),
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  // eslint-disable-next-line @typescript-eslint/no-empty-function, @typescript-eslint/no-explicit-any
   log: (...args: any[]) => void = () => {}
 ): Promise<DepositNote> {
   log(`Deposit of type ${depositType} started`);
@@ -109,7 +109,7 @@ async function withdrawWrapper(
   state: LocalState,
   caller: KeyPair,
   note: DepositNote,
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  // eslint-disable-next-line @typescript-eslint/no-empty-function, @typescript-eslint/no-explicit-any
   log: (...args: any[]) => void = () => {}
 ) {
   log(`Withdrawal of note ${note.nonce} started`);
@@ -123,7 +123,7 @@ async function withdrawWrapper(
     [
       note.nonce.toFields(),
       note.nullifier,
-      Field(1),
+      note.depositType,
       addressToWithdrawField,
     ].flat()
   );
@@ -139,7 +139,7 @@ async function withdrawWrapper(
     state.localNullifierHashedMap.getWitness(nullifierHashed);
 
   // ... and update the leaf locally
-  state.localCommitmentsMap.set(expectedCommitment, Field(1));
+  state.localCommitmentsMap.set(expectedCommitment, note.depositType);
 
   // get the caller's key (either deployer or user 0 in that file)
 
