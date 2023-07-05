@@ -50,11 +50,7 @@
 
 ## About The Project
 
-<!-- ![Solidity](https://img.shields.io/badge/Solidity-e6e6e6?style=for-the-badge&logo=solidity&logoColor=black)
-![IPFS](https://img.shields.io/badge/IPFS-e6e6e6?style=for-the-badge&logo=ipfs&logoColor=black)
-![Filecoin](https://img.shields.io/badge/Filecoin-e6e6e6?style=for-the-badge&logo=filecoin&logoColor=black)
-![Bacalhau](https://img.shields.io/badge/Bacalhau-e6e6e6?style=for-the-badge&logo=bacalhau&logoColor=black)
-![Next.js](https://img.shields.io/badge/Next.js-e6e6e6?style=for-the-badge&logo=next.js&logoColor=black) -->
+ZkMixer is a project birthed from a hackathon organized by Developer DAO and Mina Protocol.
 
 ZkMixer is a non-custodial Mina protocol and token privacy solution based on zkSNARKs, powered by SnarkyJS. This platform enhances transaction privacy by obliterating the on-chain link between sender and recipient addresses. The ZkMixer employs a smart contract that allows token deposits that can later be withdrawn by another address. Whenever tokens are withdrawn by the new address, it is impossible to trace the withdrawal back to the deposit, ensuring absolute privacy.
 
@@ -150,7 +146,6 @@ node build/src/main.js
   <img src="assets/screenshot_main.png" alt="Integration tests ZkMixer Screenshot"/>
 </p>
 
-
 <!-- GOAL -->
 
 </br>
@@ -188,7 +183,6 @@ We welcome all contributions to the ZkMixer project. If you have any suggestions
 We would like to express our deepest appreciation to Mina Protocol and Developer DAO for organizing this hackathon. Their initiatives like these offer significant opportunities for developers to learn, innovate, and contribute to the evolving blockchain space.
 
 We'd like to extend our thanks to Mina for providing an environment that encourages development and exploration. Their comprehensive documentation and resources available on the [Mina Protocol website](https://minaprotocol.com/) and [Mina Protocol Documentation](https://docs.minaprotocol.com/) have been invaluable in the development process and have greatly facilitated our understanding of the protocol.
-
 
 We would also like to highlight the insightful research paper ["PLUME: An ECDSA Nullifier Scheme for Unique Pseudonymity within Zero Knowledge Proofs"](https://eprint.iacr.org/2022/1255.pdf) by Aayush Gupta and Kobi Gurkan. This work was vital in deepening our understanding of ZK-SNARKs and their practical applications in enhancing privacy on the blockchain.
 
