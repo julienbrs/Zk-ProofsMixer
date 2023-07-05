@@ -37,3 +37,8 @@ export class DepositEvent extends Struct({
   commitment: Field,
   depositType: Field,
 }) {}
+
+export class WithdrawEvent extends Struct({
+  hashedNullifier: Field,
+  // always spent
+}) {}

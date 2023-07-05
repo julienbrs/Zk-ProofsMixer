@@ -11,7 +11,8 @@ type Transaction = Awaited<ReturnType<typeof Mina.transaction>>;
 
 // ---------------------------------------------------------------------------------------
 
-import type { ZkMixer } from "../../../contracts/src/zkMixer";
+import type { ZkMixer } from "@contracts/zkMixer";
+import { fetchDepositEvents, fetchWithdrawEvents} from "@contracts/utils";
 
 const state = {
   ZkMixer: null as null | typeof ZkMixer,
@@ -23,7 +24,7 @@ const state = {
 
 const functions = {
   setActiveInstanceToBerkeley: async (args: {}) => {
-    console.log("setActiveInstanceToBerkeley")
+    console.log("setActiveInstanceToBerkeley");
     const Berkeley = Mina.Network(
       "https://proxy.berkeley.minaexplorer.com/graphql"
     );
@@ -31,7 +32,7 @@ const functions = {
   },
 
   loadContract: async (args: {}) => {
-    const { ZkMixer } = await import("../../../contracts/build/src/zkMixer");
+    const { ZkMixer } = await import("@contracts/zkMixer");
     state.ZkMixer = ZkMixer;
   },
 
@@ -99,6 +100,14 @@ const functions = {
   getTransactionJSON: async (args: {}) => {
     return state.transaction!.toJSON();
   },
+
+  fetchDepositEvents: async (args: {}) => {
+    return JSON.stringify(await fetchDepositEvents(state.zkapp!));
+  },
+
+  fetchWithdrawEvents: async (args: {}) => {
+    return JSON.stringify(await fetchWithdrawEvents(state.zkapp!));
+  }
 };
 
 // ---------------------------------------------------------------------------------------
@@ -118,7 +127,7 @@ export type ZkappWorkerReponse = {
 
 self.onmessage = async (event: MessageEvent<ZkappWorkerRequest>) => {
   if (event.data.fn === "isReady") {
-    postMessage({ id: -1 })
+    postMessage({ id: -1 });
     return;
   }
 
@@ -129,4 +138,4 @@ self.onmessage = async (event: MessageEvent<ZkappWorkerRequest>) => {
     data: returnData,
   };
   postMessage(message);
-}
+};

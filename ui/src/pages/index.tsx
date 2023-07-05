@@ -1,24 +1,21 @@
-
-import Head from 'next/head';
-import Image from 'next/image';
-import GradientBG from '../components/GradientBG.js';
-import styles from '../styles/Home.module.css';
+import Head from "next/head";
+import Image from "next/image";
+import GradientBG from "../components/GradientBG.js";
+import styles from "../styles/Home.module.css";
 
 import { useEffect, useState } from "react";
 
-import ZkappWorkerClient from './zkappWorkerClient';
-import { PublicKey, Field, UInt32 } from 'snarkyjs';
+import ZkappWorkerClient from "./zkappWorkerClient";
+import { PublicKey, Field, UInt32, MerkleMap, Poseidon } from "snarkyjs";
+import { buildCommitmentsTreeFromEvents, buildNullifierHashedTreeFromEvents } from "@contracts/utils";
+import { DepositNote } from "@contracts/types";
 
-const CONTRACT_ADDRESS = 'B62qjKo8hYqsdjw68hSBB9XaURdNa2JQGi63yLDfVDAx21cnSdEfBeP';
+const CONTRACT_ADDRESS =
+  "B62qjDaVbV4tPuB9cn9kBXvrfhaYSvVyMjhZQcuvchRjeuQLWUKJWiR";
 let transactionFee = 0.1;
 
-type DepositNote = {
-  depositNonce: UInt32,
-  nullifier: Field,
-}
-
 export default function Home() {
-  let [state, setState] = useState({
+  const [state, setState] = useState({
     zkappWorkerClient: null as null | ZkappWorkerClient,
     hasWallet: null as null | boolean,
     hasBeenSetup: false,
@@ -29,69 +26,85 @@ export default function Home() {
     creatingWithdrawTransaction: false,
     currentCommitmentsRoot: null as null | Field,
     currentNullifierHashesRoot: null as null | Field,
+    localCommitmentsMap: null as null | MerkleMap,
+    localNullifierHashedRoot: null as null | MerkleMap,
   });
-  let [input, setInput] = useState({
-    depositType: 0 | 1 | 2,
+  const [input, setInput] = useState({
+    depositType: 1 | 2 | 3,
     addressToWithdraw: null as null | PublicKey,
-    withdrawNote: '',
+    withdrawNote: "",
   });
-  let [depositNote, setDepositNote] = useState<null | DepositNote>(null)
+  const [depositNote, setDepositNote] = useState<null | DepositNote>(null);
+  const [status, setStatus] = useState("");
 
   // SETUP
   useEffect(() => {
     (async () => {
       if (!state.hasBeenSetup) {
+        setStatus("Loading snarkyjs");
         const zkappWorkerClient = new ZkappWorkerClient();
         await zkappWorkerClient.setActiveInstanceToBerkeley();
-  
+
         const mina = (window as any).mina;
-        
+
         if (mina == null) {
           setState({ ...state, hasWallet: false });
           return;
         }
-        
+
         const publicKeyBase58: string = (await mina.requestAccounts())[0];
         const publicKey = PublicKey.fromBase58(publicKeyBase58);
-        
-        console.log('using key', publicKey.toBase58());
-        
-        console.log('checking if account exists...');
+
+        setStatus("Getting account...");
         const res = await zkappWorkerClient.fetchAccount({
-          publicKey: publicKey!
+          publicKey: publicKey!,
         });
         const accountExists = res.error == null;
-        
-        await zkappWorkerClient.loadContract();
-        
-        console.log('compiling zkApp');
-        await zkappWorkerClient.compileContract();
-        console.log('zkApp compiled');
-        
-        const zkappPublicKey = PublicKey.fromBase58(CONTRACT_ADDRESS);
-        
-        await zkappWorkerClient.initZkappInstance(zkappPublicKey);
-        
-        console.log('getting zkApp state...');
-        await zkappWorkerClient.fetchAccount({ publicKey: zkappPublicKey })
 
-        const currentCommitmentsRoot = await zkappWorkerClient.getCommitmentsRoot();
-        const currentNullifierHashesRoot = await zkappWorkerClient.getNullifierHashesRoot();
-        console.log('current state:', {
-          currentCommitmentsRoot: currentCommitmentsRoot.toString(),
-          currentNullifierHashesRoot: currentNullifierHashesRoot.toString(),
-        });
-        
+        await zkappWorkerClient.loadContract();
+
+        setStatus("Compiling zkApp (up to a min)...");
+        await zkappWorkerClient.compileContract();
+
+        const zkappPublicKey = PublicKey.fromBase58(CONTRACT_ADDRESS);
+
+        await zkappWorkerClient.initZkappInstance(zkappPublicKey);
+
+        setStatus("Getting latest merkle root...");
+        await zkappWorkerClient.fetchAccount({ publicKey: zkappPublicKey });
+
+        const currentCommitmentsRoot =
+          await zkappWorkerClient.getCommitmentsRoot();
+        const currentNullifierHashesRoot =
+          await zkappWorkerClient.getNullifierHashesRoot();
+
+        let commitmentsTree = new MerkleMap();
+        if (!currentCommitmentsRoot.equals(commitmentsTree.getRoot()).toBoolean()) {
+          setStatus("Syncing and building commitments merkle tree...");
+          const events = await zkappWorkerClient.fetchDepositEvents();
+          commitmentsTree = await buildCommitmentsTreeFromEvents(events);
+        }
+
+        let nullifierHashedTree = new MerkleMap();
+        if (!currentNullifierHashesRoot.equals(nullifierHashedTree.getRoot()).toBoolean()) {
+          setStatus("Syncing and building hashed nullifiers merkle tree...");
+          const events = await zkappWorkerClient.fetchWithdrawEvents();
+          nullifierHashedTree = await buildNullifierHashedTreeFromEvents(events);
+        }
+
+        setStatus("Done!");
         setState({
-            ...state,
-            zkappWorkerClient,
-            hasWallet: true,
-            hasBeenSetup: true,
-            publicKey,
-            zkappPublicKey,
-            accountExists,
-            currentCommitmentsRoot,
-            currentNullifierHashesRoot,
+          ...state,
+          zkappWorkerClient,
+          hasWallet: true,
+          hasBeenSetup: true,
+          publicKey,
+          zkappPublicKey,
+          accountExists,
+          currentCommitmentsRoot,
+          currentNullifierHashesRoot,
+          localCommitmentsMap: commitmentsTree,
+          localNullifierHashedRoot: nullifierHashedTree,
         });
       }
     })();
@@ -99,7 +112,7 @@ export default function Home() {
 
   // -------------------------------------------------------
   // Wait for account to exist, if it didn't
-  
+
   useEffect(() => {
     (async () => {
       if (state.hasBeenSetup && !state.accountExists) {
@@ -120,12 +133,14 @@ export default function Home() {
   }, [state.hasBeenSetup]);
 
   // -------------------------------------------------------
-  // Transaction handlersing
-
+  // Transaction handling
 
   const onSendDepositTransaction = async () => {
     setState({ ...state, creatingDepositTransaction: true });
-    console.log("sending a deposit transaction...");
+    setStatus("Deposit...");
+
+    const depositType = Field(input.depositType);
+    const addressToWithdraw = input.addressToWithdraw?.toFields()[0] ?? Field(0);
 
     const caller = await state.zkappWorkerClient!.fetchAccount({
       publicKey: state.publicKey!,
@@ -138,28 +153,26 @@ export default function Home() {
     // get caller's information
     const depositNonce = caller.account.nonce;
     const nullifier = Field.random();
-    const commitment = Field.random(); // TODO
 
-    // calculate the new commitment. If `addressToWithdraw` is Field(0), then it won't change the hash
+    // calculate the commitment. If `addressToWithdraw` is Field(0), then it won't change the hash
     // and the deposit will be withdrawable to any address that got the note
-    // const newCommitment = Poseidon.hash(
-    //   [
-    //     depositNonce.toFields(),
-    //     nullifier,
-    //     depositType,
-    //     addressToWithdraw,
-    //   ].flat()
-    // );
+    const commitment = Poseidon.hash(
+      [
+        depositNonce.toFields(),
+        nullifier,
+        depositType,
+        addressToWithdraw,
+      ].flat()
+    );
 
     // get the witness for the current tree
-    // const commitmentWitness = commitmentMap.getWitness(newCommitment);
-    const commitmentWitness = Field.random(); // TODO
+    const commitmentWitness = state.localCommitmentsMap!.getWitness(commitment);
 
     // on-chain deposit
     await state.zkappWorkerClient!.createDepositTransaction(
       commitment,
       commitmentWitness,
-      Field(input.depositType)
+      depositType
     );
 
     console.log("creating proof...");
@@ -177,38 +190,70 @@ export default function Home() {
       },
     });
 
-    console.log(
+    setStatus(
       "See transaction at https://berkeley.minaexplorer.com/transaction/" + hash
     );
 
     // update the leaf locally if the deposit was successful
-    // commitmentMap.set(newCommitment, depositType);
+    state.localCommitmentsMap?.set(commitment, depositType);
 
     // save necessary information for withdrawal
     setDepositNote({
-      depositNonce,
+      nonce: depositNonce,
+      commitment,
       nullifier,
-    })
+      depositType,
+      addressToWithdraw 
+    });
 
-    setState({ ...state, creatingDepositTransaction: false });
+    setStatus("Done!");
+    setState({
+      ...state,
+      creatingDepositTransaction: false,
+    });
   };
 
   const onSendWithdrawTransaction = async () => {
     setState({ ...state, creatingWithdrawTransaction: true });
-    console.log("sending a withdraw transaction...");
+    setStatus("Withdraw...");
+
+    const note = parseDepositNote(input.withdrawNote);
+    console.log("withdraw note", note);
+
+    const addressToWithdraw = input.addressToWithdraw?.toFields()[0] ?? Field(0);
 
     await state.zkappWorkerClient!.fetchAccount({
       publicKey: state.publicKey!,
     });
 
+    // calculate the expected commitment used when depositing
+    const expectedCommitment = Poseidon.hash(
+      [
+        note.nonce.toFields(),
+        note.nullifier,
+        note.depositType,
+        addressToWithdraw,
+      ].flat()
+    );
+
+    // hash the nullifier
+    const nullifierHashed = Poseidon.hash([note.nullifier]);
+
+    // get witnesses for the current tree...
+    const commitmentWitness = state.localCommitmentsMap!.getWitness(expectedCommitment);
+    const nullifierWitness =
+      state.localNullifierHashedRoot!.getWitness(nullifierHashed);
+
+    // ... and update the leaf locally
+    state.localNullifierHashedRoot!.set(expectedCommitment, note.depositType);
+
     await state.zkappWorkerClient!.createWithdrawTransaction(
-      // TODO: get this from the UI
-      Field.random(), // nullifier
-      Field.random(), // nullifierWitness
-      Field.random(), // commitmentWitness
-      1,              // nonce
-      Field(1),       // depositType
-      Field.random()  // specificAddressField
+      note.nullifier,
+      nullifierWitness,
+      commitmentWitness,
+      note.nonce,
+      note.depositType,
+      addressToWithdraw
     );
 
     console.log("creating proof...");
@@ -230,54 +275,96 @@ export default function Home() {
       "See transaction at https://berkeley.minaexplorer.com/transaction/" + hash
     );
 
+    setStatus("Done!");
     setState({ ...state, creatingWithdrawTransaction: false });
   };
 
   // -------------------------------------------------------
   // Refresh the current state
-  
-  const onRefresh = async () => {
-    console.log('getting zkApp state...');
-    await state.zkappWorkerClient!.fetchAccount({
-         publicKey: state.zkappPublicKey!
-    })
-    const currentCommitmentsRoot = await state.zkappWorkerClient!.getCommitmentsRoot();
-    const currentNullifierHashesRoot = await state.zkappWorkerClient!.getNullifierHashesRoot();
 
-    console.log('current state:', {
+  const onRefresh = async () => {
+    console.log("getting zkApp state...");
+    await state.zkappWorkerClient!.fetchAccount({
+      publicKey: state.zkappPublicKey!,
+    });
+    const currentCommitmentsRoot =
+      await state.zkappWorkerClient!.getCommitmentsRoot();
+    const currentNullifierHashesRoot =
+      await state.zkappWorkerClient!.getNullifierHashesRoot();
+
+    console.log("current state:", {
       currentCommitmentsRoot: currentCommitmentsRoot.toString(),
       currentNullifierHashesRoot: currentNullifierHashesRoot.toString(),
     });
-  
+
     setState({ ...state, currentCommitmentsRoot, currentNullifierHashesRoot });
-  }
-  
+  };
+
+  // -------------------------------------------------------
+  // Deposit note format
+
+
+  /**
+   * Formats a DepositNote object into a deposit note string.
+   * The deposit note string will be in the format:
+   * <nonce>-<commitment>-<nullifier>-<depositType>-<addressToWithdraw>
+   * to base64.
+   * 
+   * @param note The DepositNote object to format.
+   * @returns A deposit note string.
+   */
+  const formatDepositNote = (note: DepositNote): string => {
+    const { nonce, commitment, nullifier, depositType, addressToWithdraw } = note;
+    const str = `${nonce.toString()}-${commitment.toString()}-${nullifier.toString()}-${depositType.toString()}-${addressToWithdraw?.toString()}`;
+    return btoa(str);
+  };
+
+  /**
+   * Parses a deposit note string into a DepositNote object.
+   * The deposit note string should be in the format:
+   * <nonce>-<commitment>-<nullifier>-<depositType>-<addressToWithdraw>
+   * from base64.
+   * 
+   * @param str The deposit note string to parse.
+   * @returns A DepositNote object.
+   */
+  const parseDepositNote = (str: string): DepositNote => {
+    const [nonce, commitment, nullifier, depositType, addressToWithdraw] = atob(str).split("-");
+    return {
+      nonce: new UInt32(parseInt(nonce)),
+      commitment: new Field(commitment),
+      nullifier: Field(nullifier),
+      depositType: Field(depositType),
+      addressToWithdraw: Field(addressToWithdraw),
+    };
+  };
+
   // -------------------------------------------------------
   // UI
 
   let hasWallet;
   if (state.hasWallet != null && !state.hasWallet) {
-    const auroLink = 'https://www.aurowallet.com/';
+    const auroLink = "https://www.aurowallet.com/";
     const auroLinkElem = (
       <a href={auroLink} target="_blank" rel="noreferrer">
-        {' '}
-        [Link]{' '}
+        {" "}
+        [Link]{" "}
       </a>
     );
     hasWallet = (
       <div>
-        {' '}
+        {" "}
         Could not find a wallet. Install Auro wallet here: {auroLinkElem}
       </div>
     );
   }
 
   let setupText = state.hasBeenSetup
-    ? 'SnarkyJS Ready'
-    : 'Setting up SnarkyJS... (can take up to a minute)';
+    ? "SnarkyJS Ready"
+    : "Setting up SnarkyJS... (can take up to a minute)";
   let setup = (
     <div>
-      {' '}
+      {" "}
       {setupText} {hasWallet}
     </div>
   );
@@ -285,13 +372,13 @@ export default function Home() {
   let accountDoesNotExist;
   if (state.hasBeenSetup && !state.accountExists) {
     const faucetLink =
-      'https://faucet.minaprotocol.com/?address=' + state.publicKey!.toBase58();
+      "https://faucet.minaprotocol.com/?address=" + state.publicKey!.toBase58();
     accountDoesNotExist = (
       <div>
         Account does not exist. Please visit the faucet to fund this account
         <a href={faucetLink} target="_blank" rel="noreferrer">
-          {' '}
-          [Link]{' '}
+          {" "}
+          [Link]{" "}
         </a>
       </div>
     );
@@ -303,8 +390,13 @@ export default function Home() {
       <div>
         <div>
           <h2>zkApp State</h2>
-          <div>Current commitmentsRoot: {state.currentCommitmentsRoot!.toString()}</div>
-          <div>Current nullifierHashesRoot: {state.currentNullifierHashesRoot!.toString()}</div>
+          <div>
+            Current commitmentsRoot: {state.currentCommitmentsRoot!.toString()}
+          </div>
+          <div>
+            Current nullifierHashesRoot:{" "}
+            {state.currentNullifierHashesRoot!.toString()}
+          </div>
           <button onClick={onRefresh}>Get Latest State</button>
         </div>
 
@@ -316,8 +408,8 @@ export default function Home() {
               type="radio"
               id="depositType1"
               name="depositType"
-              value="0"
-              checked={input.depositType === 0}
+              value="1"
+              checked={input.depositType === 1}
               onChange={(e) => {
                 setInput({ ...input, depositType: parseInt(e.target.value) });
               }}
@@ -328,8 +420,8 @@ export default function Home() {
               type="radio"
               id="depositType2"
               name="depositType"
-              value="1"
-              checked={input.depositType === 1}
+              value="2"
+              checked={input.depositType === 2}
               onChange={(e) => {
                 setInput({ ...input, depositType: parseInt(e.target.value) });
               }}
@@ -340,8 +432,8 @@ export default function Home() {
               type="radio"
               id="depositType3"
               name="depositType"
-              value="2"
-              checked={input.depositType === 2}
+              value="3"
+              checked={input.depositType === 3}
               onChange={(e) => {
                 setInput({ ...input, depositType: parseInt(e.target.value) });
               }}
@@ -355,24 +447,26 @@ export default function Home() {
             onClick={onSendDepositTransaction}
             disabled={state.creatingDepositTransaction}
           >
-            {' '}
-            Deposit Transaction{' '}
+            {" "}
+            Deposit Transaction{" "}
           </button>
 
-          {depositNote &&
+          {depositNote && (
             <div>
               <h3>Deposit Note</h3>
-              <p>Please save this note. You will need it to withdraw your funds.</p>
+              <p>
+                Please save this note. You will need it to withdraw your funds.
+              </p>
               <textarea
-                value={depositNote.depositNonce.toString().concat(depositNote.nullifier.toString())}
+                value={formatDepositNote(depositNote)}
                 readOnly={true}
                 onClick={(e) => {
                   (e.target as HTMLTextAreaElement).select();
-                  document.execCommand('copy');
+                  document.execCommand("copy");
                 }}
               />
             </div>
-          }
+          )}
         </div>
 
         <div>
@@ -391,8 +485,8 @@ export default function Home() {
             onClick={onSendWithdrawTransaction}
             disabled={state.creatingWithdrawTransaction}
           >
-            {' '}
-            Withdraw Transaction{' '}
+            {" "}
+            Withdraw Transaction{" "}
           </button>
         </div>
       </div>
@@ -411,24 +505,23 @@ export default function Home() {
 
         <span>depositNote:</span>
         <pre>{JSON.stringify(depositNote, null, 2)}</pre>
+
+        <span>Status:</span>
+        <pre>{JSON.stringify(status, null, 2)}</pre>
       </code>
     </div>
-  )
+  );
 
   return (
-    <div style={{ padding: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-
+    <div style={{ padding: "20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
         <div>
           {setup}
           {accountDoesNotExist}
           {mainContent}
         </div>
 
-        <div>
-          {debug}
-        </div>
-
+        <div>{debug}</div>
       </div>
     </div>
   );

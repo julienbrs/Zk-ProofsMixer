@@ -1,10 +1,11 @@
 {
-  "name": "ui",
+  "name": "@zkMixer/ui",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build:contracts": "rm -rf contracts/build && cd ../contracts && npm run build && mv build ../ui/contracts && cd ../ui",
+    "build": "npm run build:contracts && next build",
     "start": "next start",
     "lint": "next lint",
     "ts-watch": "tsc --noEmit --incremental --watch"

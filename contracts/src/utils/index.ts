@@ -7,7 +7,13 @@ import {
   MerkleMap,
 } from 'snarkyjs';
 import { ZkMixer } from '../zkMixer';
-import { DepositEvent, DepositNote, KeyPair, LocalState } from '../types';
+import {
+  DepositEvent,
+  DepositNote,
+  KeyPair,
+  LocalState,
+  WithdrawEvent,
+} from '../types';
 
 /**
  * Deploys and initializes the zkMixer contract
@@ -141,8 +147,6 @@ async function withdrawWrapper(
   // ... and update the leaf locally
   state.localCommitmentsMap.set(expectedCommitment, note.depositType);
 
-  // get the caller's key (either deployer or user 0 in that file)
-
   // on-chain withdrawal
   const withdrawTx = await Mina.transaction(caller.publicKey, () => {
     app.withdraw(
@@ -165,19 +169,63 @@ async function withdrawWrapper(
 }
 
 /**
- * Fetches the latest Merkle tree from the zkMixer contract
+ * Fetches the latest deposit events from the zkMixer contract
  * @param app - the zkMixer contract
- * @returns the latest Merkle tree as a MerkleMap object
+ * @returns the latest deposits as an array
  */
-const fetchLatestTree = async (app: ZkMixer): Promise<MerkleMap> => {
+const fetchDepositEvents = async (app: ZkMixer): Promise<DepositEvent[]> => {
+  return (await app.fetchEvents())
+    .filter((e) => e.type === 'deposit')
+    .map((e) => e.event.data as unknown as DepositEvent);
+};
+
+/**
+ * Builds a Merkle tree from an array of deposit events
+ * @param events - an array of deposit events
+ * @returns a MerkleMap object representing the Merkle tree
+ */
+const buildCommitmentsTreeFromEvents = async (
+  events: DepositEvent[]
+): Promise<MerkleMap> => {
   const tree = new MerkleMap();
-  (await app.fetchEvents())
-    .filter((e) => e.type === 'set')
-    .forEach((e) => {
-      const event = e.event.data as unknown as DepositEvent;
-      tree.set(event.commitment, event.depositType);
-    });
+  events.forEach((e) => {
+    tree.set(e.commitment, e.depositType);
+  });
   return tree;
 };
 
-export { deployAndInit, depositWrapper, withdrawWrapper, fetchLatestTree };
+/**
+ * Fetches the latest withdraw events from the zkMixer contract
+ * @param app - the zkMixer contract
+ * @returns the latest withdraw as an array
+ */
+const fetchWithdrawEvents = async (app: ZkMixer): Promise<WithdrawEvent[]> => {
+  return (await app.fetchEvents())
+    .filter((e) => e.type === 'withdraw')
+    .map((e) => e.event.data as unknown as WithdrawEvent);
+};
+
+/**
+ * Builds a Merkle tree from an array of withdraw events
+ * @param events - an array of withdraw events
+ * @returns a MerkleMap object representing the Merkle tree
+ */
+const buildNullifierHashedTreeFromEvents = async (
+  events: WithdrawEvent[]
+): Promise<MerkleMap> => {
+  const tree = new MerkleMap();
+  events.forEach((e) => {
+    tree.set(e.hashedNullifier, Field(1));
+  });
+  return tree;
+};
+
+export {
+  deployAndInit,
+  depositWrapper,
+  withdrawWrapper,
+  fetchDepositEvents,
+  fetchWithdrawEvents,
+  buildCommitmentsTreeFromEvents,
+  buildNullifierHashedTreeFromEvents,
+};
