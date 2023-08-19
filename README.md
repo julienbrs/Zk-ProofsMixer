@@ -204,7 +204,6 @@ Twitter:
 - [Ainullindale](https://twitter.com/Ainullindale)
 - [julio4](https://twitter.com/julio4__)
 
-Mail: [zkMixerMina@gmail.com](mailto:zkMixerMina@gmail.com)
 <br />
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
